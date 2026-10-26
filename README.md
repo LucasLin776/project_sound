@@ -26,25 +26,33 @@ python scripts/diagnose_audio.py --audio data/reference/bolt_drop.wav --mode bot
 
 通用 AudioSet 标签和 SED 都只用于诊断，不能代替螺栓模型。
 
-### 已导入增强数据：手动运行冒烟测试
+### 当前82条数据：手动运行全量训练、验证和测试
 
-随机均衡批次从`D:\data_process\output\bolt_aug_v2_eq`复制到`data/raw/bolt_aug_v2_eq/`，共82条：34条正例、48条负例；包含音频、时间标注、两类图片和来源日志。全量清单为`data/manifests/bolt_aug_v2_eq_train.jsonl`，小规模冒烟清单为`data/manifests/bolt_aug_v2_eq_smoke.jsonl`（3条正例、3条负例）。所有数据仍为train。
+随机均衡批次位于`data/raw/bolt_aug_v2_eq/`，本次按约70%/15%/15%划分，并确保每组都有正反例：
 
-激活Conda环境并进入`D:\project_sound`后，由你手动运行：
+| 集合 | 总数 | 正例 | 反例 |
+|---|---:|---:|---:|
+| 训练集 | 58 | 24 | 34 |
+| 验证集 | 12 | 5 | 7 |
+| 测试集 | 12 | 5 | 7 |
 
-```bat
-python scripts/smoke_train.py
-```
-
-它使用默认的冻结PANNs Cnn14 + 时频统计特征，执行特征提取、分类器训练、JSON模型重载及两条WAV推理。固定阈值0.5，不选择验证阈值，不以预测对错判定成功。终端显示`SMOKE TEST PASSED`、输出的`smoke_report.json`中`status=passed`即表示流程完成。输出在`artifacts/smoke_runs/<本次编号>/`。
-
-只检查数据、依赖和权重文件是否存在，不提取特征、不加载模型、不训练：
+在Conda环境中进入`D:\project_sound`，由你手动启动：
 
 ```bat
-python scripts/smoke_train.py --check-only
+python scripts/full_test.py
 ```
 
-详细说明见[冒烟测试指南](docs/SMOKE_TEST.md)。此次接入仅做准备和只读预检，未启动特征提取、训练或真实录音推理。常规`train`仍需要独立验证集；本次冒烟模式使用同一训练组检查程序流程，不生成准确率结论。
+执行全部82条的PANNs深度特征和时频统计提取、训练集拟合、验证集选阈值、三个集合的指标计算，以及全部82条WAV逐条检测。终端进度、集合数量、结果摘要均使用中文。完成后显示`全量流程测试完成`，结果在`artifacts/full_runs/<本次编号>/`，含模型、指标、82份预测、详细日志和中文CSV汇总。
+
+只检查数据和环境：
+
+```bat
+python scripts/full_test.py --check-only
+```
+
+完整清单是`data/manifests/bolt_aug_v2_eq_all.jsonl`；训练/验证/测试分别为`bolt_aug_v2_eq_train.jsonl`、`bolt_aug_v2_eq_val.jsonl`、`bolt_aug_v2_eq_test.jsonl`。划分种子固定为20261026，配对正反例留在同一集合。详细步骤见[全量流程测试指南](docs/FULL_TEST.md)。
+
+旧的6条小规模入口`python scripts/smoke_train.py`保留，终端提示也已改为中文。本次代码准备和划分没有启动训练。
 
 ## 2. 标注、训练、检测
 

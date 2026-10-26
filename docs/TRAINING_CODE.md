@@ -17,6 +17,8 @@
 
 ## 建议阅读顺序
 
+当前全量测试从`scripts/full_test.py`开始读：`preflight(full_data=True)`检查三组数据，`run_full`依次调用全部特征提取、`train_classifier(allow_related_splits=True)`、模型重载和全部WAV检测。划分代码在`scripts/split_dataset.py`，使用固定种子、按正反例分层，并让配对样本进入同一集合。该入口保留原始来源组信息，按本次测试要求允许来源组出现在三个集合。
+
 本次新增的手动冒烟入口为`scripts/smoke_train.py`，运行说明见`docs/SMOKE_TEST.md`。先读`preflight`了解只读预检，再读`run_smoke`跟踪`extract_manifest → train_classifier(smoke_test=True) → LinearClassifier.load → BoltDetector.detect`。冒烟模式使用固定阈值0.5、不评估准确率；常规训练的独立验证要求保持启用。
 
 所有路径相对于 `D:\project_sound`。先读项目主链路，再读 vendor 的底层网络。

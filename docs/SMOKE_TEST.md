@@ -6,7 +6,7 @@
 - 项目内副本：`D:\project_sound\data\raw\bolt_aug_v2_eq`；原数据保留。
 - 82条WAV：34条有目标、48条无目标；每条30秒、32 kHz、单声道PCM16。
 - 音频、34份正例Audition标签、82张波形图、82张时频图及增强日志一并复制。
-- 全量清单：`data/manifests/bolt_aug_v2_eq_train.jsonl`。
+- 当前全量划分清单：`data/manifests/bolt_aug_v2_eq_all.jsonl`，使用新入口`python scripts/full_test.py`执行全量流程，见`docs/FULL_TEST.md`。
 - 冒烟清单：`data/manifests/bolt_aug_v2_eq_smoke.jsonl`，6条录音、3正3负。
 - 导入记录：`data/manifests/bolt_aug_v2_eq_import.json`，含文件校验、来源和所选录音。
 
@@ -48,8 +48,8 @@ python scripts/smoke_train.py --check-only
 终端最后显示：
 
 ```text
-SMOKE TEST PASSED
-Report: D:\project_sound\artifacts\smoke_runs\<本次编号>\smoke_report.json
+冒烟测试通过
+测试报告：D:\project_sound\artifacts\smoke_runs\<本次编号>\smoke_report.json
 ```
 
 每次创建独立目录，不覆盖上次结果：

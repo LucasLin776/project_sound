@@ -69,14 +69,14 @@ def test_preflight_rejects_validation_rows(tmp_path):
     rows[0].update(split="val", group_id="separate")
     manifest.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
     settings = Settings(project_dir=tmp_path, checkpoint_dir=tmp_path, feature_set="acoustic")
-    with pytest.raises(ValueError, match="train rows only"):
+    with pytest.raises(ValueError, match="只能包含训练集"):
         smoke.preflight(settings, manifest)
 
 
 def test_preflight_checks_checkpoint_without_loading_it(tmp_path):
     manifest, _ = make_manifest(tmp_path)
     settings = Settings(project_dir=tmp_path, checkpoint_dir=tmp_path, feature_set="fusion")
-    with pytest.raises(FileNotFoundError, match="checkpoint"):
+    with pytest.raises(FileNotFoundError, match="权重文件"):
         smoke.preflight(settings, manifest)
 
 
@@ -125,5 +125,5 @@ def test_output_check_accepts_either_prediction_without_accuracy_gate():
                   "score": .8 if detected else .1, "quality": {"duration_seconds": 30.}, "processing_seconds": .2}
         smoke.validate_detection_result(result)
     result["events"][0]["end_s"] = 31.
-    with pytest.raises(ValueError, match="outside the recording"):
+    with pytest.raises(ValueError, match="录音范围"):
         smoke.validate_detection_result(result)

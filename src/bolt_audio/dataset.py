@@ -10,7 +10,7 @@ import soundfile as sf
 from .features import FeatureExtractor, file_sha256
 
 
-def load_manifest(path: Path, require_ready=False) -> list[dict]:
+def load_manifest(path: Path, require_ready=False, *, allow_related_splits=False) -> list[dict]:
     """One JSON object per recording; all event intervals must be reviewed."""
     records, ids, groups, hashes, paths = [], set(), {}, {}, set()
     for line_number, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
@@ -55,7 +55,7 @@ def load_manifest(path: Path, require_ready=False) -> list[dict]:
         digest = file_sha256(audio)
         for value, mapping, kind in [(row["group_id"], groups, "group_id"), (digest, hashes, "identical audio")]:
             previous = mapping.setdefault(value, row["split"])
-            if previous != row["split"]:
+            if previous != row["split"] and not (allow_related_splits and kind == "group_id"):
                 raise ValueError(f"{prefix}: {kind} crosses splits ({previous}, {row['split']})")
         records.append({**row, "path": audio, "duration_s": info.duration,
                         "sha256": digest, "intervals": intervals})
@@ -75,12 +75,14 @@ def window_labels(starts, ends, intervals, guard_seconds):
     return labels
 
 
-def extract_manifest(manifest: Path, output: Path, extractor: FeatureExtractor):
-    records = load_manifest(manifest, require_ready=True)
+def extract_manifest(manifest: Path, output: Path, extractor: FeatureExtractor, *, allow_related_splits=False):
+    records = load_manifest(manifest, require_ready=True, allow_related_splits=allow_related_splits)
     chunks, targets, starts, ends, recording_ids, group_ids, splits = [], [], [], [], [], [], []
     metadata = []
-    for row in records:
-        print(f"Extracting {row['recording_id']}: {row['path'].name}", flush=True)
+    split_names = {"train": "训练集", "val": "验证集", "test": "测试集"}
+    for index, row in enumerate(records, 1):
+        print(f"[特征提取 {index}/{len(records)}] {split_names[row['split']]}："
+              f"{row['recording_id']}，文件 {row['path'].name}", flush=True)
         result = extractor.extract(row["path"])
         labels = window_labels(result["start_s"], result["end_s"], row["intervals"],
                                extractor.settings.negative_guard_seconds)
@@ -101,6 +103,7 @@ def extract_manifest(manifest: Path, output: Path, extractor: FeatureExtractor):
                          "quality": result["quality"], "event_intervals": row["intervals"],
                          "total_windows": count, "supervised_windows": int((labels >= 0).sum()),
                          "uncertain_windows": int((labels < 0).sum())})
+        metadata[-1]["pipeline_test"] = bool(allow_related_splits)
     if any(row["supervised_windows"] == 0 for row in metadata):
         raise ValueError("A recording has no usable windows; check annotation guard intervals")
     output.parent.mkdir(parents=True, exist_ok=True)

@@ -30,6 +30,7 @@ def merge_windows(starts, ends, scores, threshold, gap, min_windows):
 
 def metrics(y, predicted, scores=None):
     result = {"count": len(y), "confusion_matrix_0_1": confusion_matrix(y, predicted, labels=[0, 1]).tolist(),
+              "accuracy": float(np.mean(np.asarray(y) == np.asarray(predicted))),
               "precision": float(precision_score(y, predicted, zero_division=0)),
               "recall": float(recall_score(y, predicted, zero_division=0)),
               "f1": float(f1_score(y, predicted, zero_division=0))}
@@ -95,7 +96,8 @@ class LinearClassifier:
         return expit(((features - self.mean) / self.scale) @ self.coefficient + self.intercept)
 
 
-def train_classifier(cache_path: Path, output: Path, gap=0.25, min_windows=1, event_iou=0.3, *, smoke_test=False):
+def train_classifier(cache_path: Path, output: Path, gap=0.25, min_windows=1, event_iou=0.3, *,
+                     smoke_test=False, allow_related_splits=False):
     if not np.isfinite(event_iou) or not 0 < event_iou <= 1:
         raise ValueError("event_iou must be finite and in (0, 1]")
     with np.load(cache_path, allow_pickle=False) as cache:
@@ -111,7 +113,8 @@ def train_classifier(cache_path: Path, output: Path, gap=0.25, min_windows=1, ev
         raise ValueError("Feature cache columns have mismatched lengths")
     if not set(splits) <= {"train", "val", "test"}:
         raise ValueError("Cache contains unassigned splits")
-    for keys in (groups, ids):
+    # 当前增强批次的全量流程测试可共享来源组；每条录音仍只能属于一个集合。
+    for keys in ((ids,) if allow_related_splits else (groups, ids)):
         if any(len(set(splits[keys == value])) > 1 for value in np.unique(keys)):
             raise ValueError("Group or recording leaks across dataset splits")
     hash_splits = {}
@@ -174,10 +177,12 @@ def train_classifier(cache_path: Path, output: Path, gap=0.25, min_windows=1, ev
         "threshold_selection": "fixed 0.5 for train-only smoke test; no performance evaluation" if smoke_test else
         "maximum validation event F1; recording F1 then precision break ties; test unused",
         "smoke_test_only": bool(smoke_test),
+        "evaluation_scope": "pipeline_test" if allow_related_splits else "smoke_test" if smoke_test else "dataset_split",
         "event_iou": event_iou,
         "uncertain_windows": "Excluded from fitting/window metrics; included in recording-level alarm evaluation",
         "deployment_validated": False, "reports": reports, "training_records": records,
         "notice": "Pipeline smoke test only. No independent validation or accuracy estimate." if smoke_test else
+        "Full-dataset pipeline test on the current augmented batch." if allow_related_splits else
         "Prototype. Validation selected the threshold; test is the independent estimate. Overlapping windows are correlated.",
     }
     output.mkdir(parents=True, exist_ok=True)

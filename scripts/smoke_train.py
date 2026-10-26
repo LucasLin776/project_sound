@@ -1,9 +1,8 @@
-"""Manually run a small train-only PANNs pipeline check; --check-only never starts training."""
+"""手动运行小规模训练冒烟测试；--check-only 只检查数据与环境，不启动训练。"""
 from __future__ import annotations
 
 import argparse
 import gc
-import json
 import math
 import sys
 import time
@@ -14,36 +13,45 @@ from pathlib import Path
 from uuid import uuid4
 
 
-def preflight(settings, manifest: Path) -> tuple[list[dict], dict]:
+def preflight(settings, manifest: Path, *, full_data=False) -> tuple[list[dict], dict]:
     """Read configuration, metadata and WAV headers; do not instantiate a model or fit anything."""
     import numpy as np
     from bolt_audio.audio import window_starts
     from bolt_audio.dataset import load_manifest, window_labels
 
-    rows = load_manifest(manifest.resolve(strict=True), require_ready=True)
-    if {row["split"] for row in rows} != {"train"}:
-        raise ValueError("The smoke manifest must contain train rows only")
+    rows = load_manifest(manifest.resolve(strict=True), require_ready=True, allow_related_splits=full_data)
+    expected = {"train", "val", "test"} if full_data else {"train"}
+    if {row["split"] for row in rows} != expected:
+        raise ValueError("全量清单必须同时包含训练集、验证集、测试集" if full_data else "冒烟清单只能包含训练集录音")
     classes = [bool(row["events"]) for row in rows]
     if set(classes) != {False, True}:
-        raise ValueError("The smoke manifest needs event recordings and fully negative recordings")
+        raise ValueError("测试清单必须同时包含正例和反例")
+    for split in expected:
+        if {bool(row["events"]) for row in rows if row["split"] == split} != {False, True}:
+            raise ValueError(f"{split}集合必须同时包含正例和反例")
     dependencies = {name: version(name) for name in
                     ("numpy", "scipy", "soundfile", "librosa", "scikit-learn", "torch", "torchlibrosa")}
     checkpoint = None
     if settings.feature_set != "acoustic":
         checkpoint = settings.checkpoint_dir / "Cnn14_mAP=0.431.pth"
         if not checkpoint.is_file() or checkpoint.stat().st_size < 1024 * 1024:
-            raise FileNotFoundError(f"Missing or incomplete PANNs checkpoint: {checkpoint}")
-    all_labels = []
+            raise FileNotFoundError(f"PANNs权重文件缺失或不完整：{checkpoint}")
+    all_labels, split_labels = [], {split: [] for split in expected}
     window, hop = round(settings.window_seconds * settings.sample_rate), round(settings.hop_seconds * settings.sample_rate)
     for row in rows:
         if row["duration_s"] > settings.max_audio_seconds:
-            raise ValueError(f"Recording exceeds configured duration limit: {row['recording_id']}")
+            raise ValueError(f"录音超过配置的时长上限：{row['recording_id']}")
         frames = round(row["duration_s"] * settings.sample_rate)
         starts = np.asarray(window_starts(frames, window, hop), dtype=np.float64) / settings.sample_rate
         ends = np.minimum(starts + settings.window_seconds, row["duration_s"])
-        all_labels.extend(window_labels(starts, ends, row["intervals"], settings.negative_guard_seconds).tolist())
+        labels = window_labels(starts, ends, row["intervals"], settings.negative_guard_seconds).tolist()
+        all_labels.extend(labels)
+        split_labels[row["split"]].extend(labels)
     if not {0, 1} <= set(all_labels):
-        raise ValueError("The selected windows must include both training classes")
+        raise ValueError("所选窗口必须同时包含正例和反例")
+    for split, labels in split_labels.items():
+        if not {0, 1} <= set(labels):
+            raise ValueError(f"{split}集合的窗口必须同时包含正例和反例")
     plan = {
         "status": "ready", "check_only": True, "training_started": False, "model_initialized": False,
         "manifest": str(manifest.resolve()), "python": sys.executable, "dependencies": dependencies,
@@ -55,28 +63,54 @@ def preflight(settings, manifest: Path) -> tuple[list[dict], dict]:
         "planned_windows": len(all_labels),
         "planned_window_labels": {str(label): all_labels.count(label) for label in (-1, 0, 1)},
         "expected_feature_dimensions": {"fusion": 2060, "panns": 2048, "acoustic": 12}[settings.feature_set],
-        "threshold": .5, "performance_evaluation": False,
+        "threshold": None if full_data else .5, "performance_evaluation": bool(full_data),
+        "split_counts": {split: {"recordings": sum(row["split"] == split for row in rows),
+                                 "positive": sum(row["split"] == split and bool(row["events"]) for row in rows),
+                                 "negative": sum(row["split"] == split and not row["events"] for row in rows),
+                                 "windows": len(split_labels[split])}
+                         for split in ("train", "val", "test") if split in expected},
     }
     return rows, plan
+
+
+def configure_console() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
+def print_plan(plan: dict) -> None:
+    print("数据与环境预检通过。", flush=True)
+    print(f"数据清单：{plan['manifest']}")
+    print(f"Python解释器：{plan['python']}")
+    features = {"fusion": "PANNs深度特征 + 时频统计", "panns": "PANNs深度特征", "acoustic": "时频统计"}
+    print(f"特征方案：{features[plan['feature_set']]}，设备：{plan['device']}")
+    print(f"录音总数：{plan['recordings']}，正例：{plan['positive_recordings']}，反例：{plan['negative_recordings']}")
+    for split, counts in plan["split_counts"].items():
+        name = {"train": "训练集", "val": "验证集", "test": "测试集"}[split]
+        print(f"{name}：{counts['recordings']}条，正例{counts['positive']}条，反例{counts['negative']}条")
+    print(f"预计窗口数：{plan['planned_windows']}，每个窗口特征维数：{plan['expected_feature_dimensions']}")
+    print("阈值设置：由验证集选择" if plan["performance_evaluation"] else "阈值设置：固定为0.5")
+    print("预检未初始化特征模型，未提取特征，未启动训练。", flush=True)
 
 
 def validate_detection_result(result: dict) -> None:
     """Success concerns executable output and its format, not whether the prediction is correct."""
     if not {"bolt_detected", "events", "score", "quality", "processing_seconds"} <= result.keys():
-        raise ValueError("Detection result is missing required fields")
+        raise ValueError("检测结果缺少必要字段")
     if type(result["bolt_detected"]) is not bool or not isinstance(result["events"], list):
-        raise ValueError("Invalid detection result types")
+        raise ValueError("检测结果字段类型不正确")
     if result["bolt_detected"] != bool(result["events"]):
-        raise ValueError("Detection flag and event list disagree")
+        raise ValueError("检测标志与事件列表不一致")
     if not math.isfinite(result["score"]) or not 0 <= result["score"] <= 1:
-        raise ValueError("Detection score is invalid")
+        raise ValueError("检测分数无效")
     if not math.isfinite(result["processing_seconds"]) or result["processing_seconds"] < 0:
-        raise ValueError("Detection timing is invalid")
+        raise ValueError("检测耗时无效")
     duration = result["quality"]["duration_seconds"]
     for event in result["events"]:
         if not (0 <= event["start_s"] < event["end_s"] <= duration
                 and math.isfinite(event["score"]) and 0 <= event["score"] <= 1):
-            raise ValueError("Detection event is outside the recording or has an invalid score")
+            raise ValueError("事件超出录音范围，或事件分数无效")
 
 
 def run_smoke(settings, manifest: Path, rows: list[dict], plan: dict, output: Path) -> dict:
@@ -96,7 +130,7 @@ def run_smoke(settings, manifest: Path, rows: list[dict], plan: dict, output: Pa
     report = {"status": "running", "smoke_test_only": True, "performance_evaluated": False,
               "manifest": str(manifest.resolve()), "output": str(output.resolve()), "steps_completed": completed}
     try:
-        print(f"[1/4] Extracting {settings.feature_set} features from {len(rows)} recordings...", flush=True)
+        print(f"[1/4] 正在从{len(rows)}条录音提取特征……", flush=True)
         cache = output / "features.npz"
         extractor = FeatureExtractor(settings)
         extraction = extract_manifest(manifest, cache, extractor)
@@ -105,26 +139,26 @@ def run_smoke(settings, manifest: Path, rows: list[dict], plan: dict, output: Pa
         with np.load(cache, allow_pickle=False) as values:
             X, y = values["X"], values["y"]
         if X.shape != (plan["planned_windows"], plan["expected_feature_dimensions"]) or not np.isfinite(X).all():
-            raise ValueError("Feature cache has unexpected dimensions or non-finite values")
+            raise ValueError("特征缓存维数不符合预期，或含有无效数值")
         completed.append("feature_extraction")
 
-        print("[2/4] Fitting scaler + logistic classifier; fixed threshold 0.5...", flush=True)
+        print("[2/4] 正在拟合标准化参数和分类器，阈值固定为0.5……", flush=True)
         model_dir = output / "model"
         artifact = train_classifier(cache, model_dir, settings.merge_gap_seconds,
                                     settings.min_positive_windows, smoke_test=True)
         completed.append("training")
 
-        print("[3/4] Reloading classifier JSON and checking numerical predictions...", flush=True)
+        print("[3/4] 正在重新加载模型文件并检查预测分数……", flush=True)
         model_path = model_dir / "classifier.json"
         reloaded = LinearClassifier.load(model_path, allow_smoke_test=True)
         scores = reloaded.predict_scores(X)
         if scores.shape != (len(y),) or not np.isfinite(scores).all() or not ((0 <= scores) & (scores <= 1)).all():
-            raise ValueError("Reloaded classifier returned invalid scores")
+            raise ValueError("重新加载的分类器返回了无效分数")
         if not artifact["smoke_test_only"]:
-            raise ValueError("Smoke classifier is missing its purpose marker")
+            raise ValueError("模型缺少冒烟测试标记")
         completed.append("model_reload")
 
-        print("[4/4] Running the WAV detection interface on one positive and one negative file...", flush=True)
+        print("[4/4] 正在对一条正例和一条反例执行完整WAV检测……", flush=True)
         detector = BoltDetector(replace(settings, classifier_path=model_path), allow_smoke_test=True)
         examples = [next(row for row in rows if row["events"]), next(row for row in rows if not row["events"])]
         predictions = []
@@ -143,7 +177,7 @@ def run_smoke(settings, manifest: Path, rows: list[dict], plan: dict, output: Pa
                       notice="Pipeline completed. Prediction correctness is not a pass/fail condition.")
         write_json(output / "smoke_report.json", report)
         (output / "RUNNING.json").unlink()
-        print(f"SMOKE TEST PASSED\nReport: {output / 'smoke_report.json'}", flush=True)
+        print(f"冒烟测试通过\n测试报告：{output / 'smoke_report.json'}", flush=True)
         return report
     except Exception as error:
         report.update(status="failed", error_type=type(error).__name__, error=str(error),
@@ -153,21 +187,22 @@ def run_smoke(settings, manifest: Path, rows: list[dict], plan: dict, output: Pa
 
 
 def main(argv=None) -> int:
+    configure_console()
     project = Path(__file__).resolve().parents[1]
     # Resolve this checkout before an editable installation pointing to an older directory.
     sys.path.insert(0, str(project / "src"))
     from bolt_audio.config import Settings
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=project / "configs/default.json")
-    parser.add_argument("--manifest", type=Path, default=project / "data/manifests/bolt_aug_v2_eq_smoke.jsonl")
-    parser.add_argument("--output-dir", type=Path, help="New directory only; default: artifacts/smoke_runs/<run ID>")
-    parser.add_argument("--check-only", action="store_true", help="Read-only preflight; no extraction, model loading or training")
+    parser.add_argument("--config", type=Path, default=project / "configs/default.json", help="项目配置文件")
+    parser.add_argument("--manifest", type=Path, default=project / "data/manifests/bolt_aug_v2_eq_smoke.jsonl", help="冒烟数据清单")
+    parser.add_argument("--output-dir", type=Path, help="新输出目录，默认位于artifacts/smoke_runs下")
+    parser.add_argument("--check-only", action="store_true", help="只读预检，不加载模型、不提取特征、不训练")
     args = parser.parse_args(argv)
     settings = Settings.load(args.config.resolve(), classifier_path=None)
     manifest = args.manifest.resolve(strict=True)
     rows, plan = preflight(settings, manifest)
-    print(json.dumps(plan, ensure_ascii=False, indent=2), flush=True)
+    print_plan(plan)
     if args.check_only:
         return 0
     run_id = f"{datetime.now():%Y%m%d_%H%M%S}_{uuid4().hex[:8]}"
