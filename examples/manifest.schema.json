@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["recording_id", "audio", "group_id", "split", "reviewed", "events"],
+  "properties": {
+    "recording_id": {"type": "string", "minLength": 1},
+    "audio": {"type": "string", "minLength": 1},
+    "group_id": {"type": "string", "minLength": 1},
+    "split": {"enum": ["train", "val", "test", "unassigned"]},
+    "reviewed": {"type": "boolean"},
+    "events": {"type": "array", "items": {
+      "type": "object", "required": ["start_s", "end_s"],
+      "properties": {"start_s": {"type": "number", "minimum": 0}, "end_s": {"type": "number", "exclusiveMinimum": 0}}
+    }},
+    "notes": {"type": "string"}
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "project_dir": "D:\\project_sound",
+  "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+  "file_verification": [
+    {
+      "path": "data/reference/bolt_drop.wav",
+      "sha256": "1fa0061ec55c0919bdd8868d48e5bab81e85366e5be156844346d24ea05681f9",
+      "source_matches": true
+    },
+    {
+      "path": "checkpoints/Cnn14_mAP=0.431.pth",
+      "sha256": "0dc499e40e9761ef5ea061ffc77697697f277f6a960894903df3ada000e34b31",
+      "source_matches": true
+    },
+    {
+      "path": "checkpoints/Cnn14_DecisionLevelMax_mAP=0.385.pth",
+      "sha256": "dd3b4043a87d4ec13df8082c0fcfee3fb5084151808e47e060987a95eabdd142",
+      "source_matches": true
+    }
+  ],
+  "upstreams": [
+    {
+      "name": "audioset_tagging_cnn",
+      "url": "https://github.com/qiuqiangkong/audioset_tagging_cnn",
+      "commit": "d2f4b8c18eab44737fcc0de1248ae21eb43f6aa4"
+    },
+    {
+      "name": "panns_inference",
+      "url": "https://github.com/qiuqiangkong/panns_inference",
+      "commit": "f673f604ec6f4805a61c5b3be087e24776ec5fda"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=78.1", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wind-bolt-audio"
+version = "0.1.0"
+description = "PANNs-based wind turbine bolt sound detection development framework"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "torch>=2.6,<2.7", "numpy==1.26.4", "scipy==1.15.2",
+  "librosa==0.11.0", "soundfile==0.13.1", "torchlibrosa==0.1.0",
+  "matplotlib==3.10.1", "scikit-learn==1.6.1", "h5py==3.13.0",
+  "pandas==2.2.3",
+]
+
+[project.optional-dependencies]
+api = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1", "python-multipart>=0.0.20,<1"]
+dev = ["pytest>=8,<10", "httpx>=0.28,<1", "ruff>=0.11,<1"]
+
+[project.scripts]
+bolt-audio = "bolt_audio.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"bolt_audio.vendor.panns" = ["class_labels_indices.csv", "LICENSE*.txt", "NOTICE.txt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+exclude = ["research", "src/bolt_audio/vendor", "src/bolt_audio/diagnostics.py"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

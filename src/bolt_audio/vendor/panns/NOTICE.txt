@@ -1,0 +1,6 @@
+Models and pytorch_utils: qiuqiangkong/audioset_tagging_cnn,
+commit d2f4b8c18eab44737fcc0de1248ae21eb43f6aa4.
+Inference interface and AudioSet labels: qiuqiangkong/panns_inference,
+commit f673f604ec6f4805a61c5b3be087e24776ec5fda.
+Modified for the unified wind-bolt-audio project. See bundled MIT licenses
+and third_party/NOTICE.md for source URLs and integration details.

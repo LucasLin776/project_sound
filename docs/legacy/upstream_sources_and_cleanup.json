@@ -1,0 +1,141 @@
+{
+  "repositories": [
+    {
+      "name": "audioset_tagging_cnn",
+      "url": "https://github.com/qiuqiangkong/audioset_tagging_cnn",
+      "commit": "d2f4b8c18eab44737fcc0de1248ae21eb43f6aa4"
+    },
+    {
+      "name": "panns_inference",
+      "url": "https://github.com/qiuqiangkong/panns_inference",
+      "commit": "f673f604ec6f4805a61c5b3be087e24776ec5fda"
+    }
+  ],
+  "removed_source_files": [
+    {
+      "path": "third_party/audioset_tagging_cnn/resources/classwise_iteration_map.pdf",
+      "bytes": 94675,
+      "sha256": "077672972f143ece9c683c5e14248354d7cad5eed6becdac2ecf4e840a6a7919"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/resources/complexity_mAP.pdf",
+      "bytes": 16081,
+      "sha256": "ee39659484875c8be5712fc0a1686f0508127459ea1d19f15b0bae6144481aeb"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/resources/long_fig.pdf",
+      "bytes": 156683,
+      "sha256": "e7914525fddd5a873e4b8698f69e6052c62e6d494678b873267c504dbd992616"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/resources/mAP_table.png",
+      "bytes": 113434,
+      "sha256": "85a196b117ee7d4b5afeebb2e64fc7ab6e48860f5d242d83da3d5f5b2f3f400a"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/resources/R9_ZSCveAHg_7s.mp3",
+      "bytes": 42561,
+      "sha256": "a65981c5b4fc8bdd6c572b5697f54aed197cf2d62a1b3166dc4716c524f6eb59"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/resources/R9_ZSCveAHg_7s.wav",
+      "bytes": 448078,
+      "sha256": "59429c7174a3707575581d0b4181b1e2a420bda5d1de8d5195cf0b1e07d8bdfd"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/resources/sed_R9_ZSCveAHg_7s.png",
+      "bytes": 220721,
+      "sha256": "dca92d56f74a2fe4c6a2065ac232efb8452208b34a8e7382c1c9c18b7c1102c0"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/resources/six_figures.pdf",
+      "bytes": 141749,
+      "sha256": "9c5508b53926214996d85f30317cd5c131b36548eeef81a06f992878238e3fe6"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/resources/six_figures.png",
+      "bytes": 508742,
+      "sha256": "de105ffde3f669d6dbcedd095a571905cdd7c756a3381fd96bb863e0b861a42b"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/scripts/0_inference.sh",
+      "bytes": 1036,
+      "sha256": "2455bf3060bad771a58189e10fbd4818099604298b5a903c9a7dea5162685224"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/scripts/1_download_dataset.sh",
+      "bytes": 2357,
+      "sha256": "5820418b239299a13c27f03a9483fefa2aa49d37bd7da492e462c0e3934a7034"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/scripts/2_pack_waveforms_to_hdf5s.sh",
+      "bytes": 1412,
+      "sha256": "d86b6b6d6350a3560dbb4233e79f5a5459f10e5a1982618beaa9b271a13a5422"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/scripts/3_create_training_indexes.sh",
+      "bytes": 1315,
+      "sha256": "d744e8944b2fdf64f7e302943e0d5a8dd91c5125843f54c464006ba56bd7a407"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/scripts/4_train.sh",
+      "bytes": 692,
+      "sha256": "5ee6f150802e668eb467adb36e5d96d2651566160b6153d2824149af511e37d2"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/utils/plot_for_paper.py",
+      "bytes": 26649,
+      "sha256": "197e05c9f0eb9d37348e76f075a7583fd06435f870ed61e6e0a4110c463d69ea"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/utils/plot_statistics.py",
+      "bytes": 102697,
+      "sha256": "51dee9f9bbca7b986eae30e92a61d85c09c993398e440c78c3e14a37f4ae74e6"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/utils/crash.py",
+      "bytes": 378,
+      "sha256": "27cf442994e3548c830048e367de4cf5c19fae5889364763204b1255707fc5cb"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/utils/create_black_list.py",
+      "bytes": 1950,
+      "sha256": "61ef8727fcd12cda873e45fe3bb3fd33940bd0374943549557b81868a93b6102"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/metadata/black_list/groundtruth_weak_label_evaluation_set.csv",
+      "bytes": 75925,
+      "sha256": "a275dcfd040b77fa1e8bd2687e583988a9169ba2e02b97e633e5d2347011592a"
+    },
+    {
+      "path": "third_party/audioset_tagging_cnn/metadata/black_list/groundtruth_weak_label_testing_set.csv",
+      "bytes": 34805,
+      "sha256": "d8e309e1a1a745b2d73b04763a9419cf1acf3c091fada6e89e282e0ad425546f"
+    },
+    {
+      "path": "third_party/panns_inference/resources/R9_ZSCveAHg_7s.wav",
+      "bytes": 448078,
+      "sha256": "59429c7174a3707575581d0b4181b1e2a420bda5d1de8d5195cf0b1e07d8bdfd"
+    },
+    {
+      "path": "third_party/panns_inference/resources/sed_result.png",
+      "bytes": 29975,
+      "sha256": "47636c8a069553346c7693f4e7bdf5cea0e2dcff6b604ec65ab7d3b094e962b4"
+    },
+    {
+      "path": "third_party/panns_inference/resources/_old_sed_result.png",
+      "bytes": 29764,
+      "sha256": "b0cb468b969dd5d3392721bc051e5a273eb8b85fd23bda3dc960648a0ab2fc1b"
+    },
+    {
+      "path": "third_party/panns_inference/example.py",
+      "bytes": 2435,
+      "sha256": "07e3415a690ba81f2324fed762b8dbddba7a3e036ab23a7042443b95d8956282"
+    }
+  ],
+  "reason": "Remove public demo assets, paper plots, AudioSet example shell scripts, DCASE benchmark blacklist files, debugging hooks. Core model/training/inference and licenses retained.",
+  "retained_git_metadata": [
+    "third_party/audioset_tagging_cnn/.git",
+    "third_party/panns_inference/.git"
+  ]
+}
