@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import secrets
 import tempfile
@@ -10,10 +9,11 @@ from threading import Lock
 from uuid import uuid4
 
 import soundfile as sf
-from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Request, Response, UploadFile
 
 from .config import Settings
-from .detector import BoltDetector
+from .detector import BoltDetector, UntrainedDetectorError
+from .reporting import write_json
 
 
 def create_app(settings: Settings | None = None, detector_factory=BoltDetector) -> FastAPI:
@@ -32,11 +32,12 @@ def create_app(settings: Settings | None = None, detector_factory=BoltDetector) 
 
     @app.get("/health")
     def health(request: Request):
-        return {"status": "ready", "bolt_detector_trained": request.app.state.detector.classifier is not None,
+        trained = request.app.state.detector.classifier is not None
+        return {"status": "ready" if trained else "model_missing", "bolt_detector_trained": trained,
                 "deployment_validated": False}
 
     @app.post("/detect")
-    def detect(request: Request, file: UploadFile):
+    def detect(request: Request, response: Response, file: UploadFile):
         if token and not secrets.compare_digest(request.headers.get("authorization", ""), f"Bearer {token}"):
             raise HTTPException(401, "Invalid API token")
         if not gate.acquire(blocking=False):
@@ -54,17 +55,18 @@ def create_app(settings: Settings | None = None, detector_factory=BoltDetector) 
                 if not size:
                     raise HTTPException(400, "Empty audio file")
                 try:
-                    result = request.app.state.detector.detect(audio)
+                    request_id = uuid4().hex
+                    result = request.app.state.detector.detect(
+                        audio, log_path=cfg.project_dir / "logs/api" / f"{request_id}.json",
+                        request_id=request_id,
+                        audio_name=Path((file.filename or "upload").replace("\\", "/")).name,
+                    )
+                except UntrainedDetectorError as error:
+                    raise HTTPException(503, str(error), headers={"X-Request-ID": request_id}) from error
                 except (ValueError, sf.LibsndfileError) as error:
-                    raise HTTPException(400, str(error)) from error
-            request_id = uuid4().hex
-            result["request_id"] = request_id
-            result["audio_name"] = Path((file.filename or "upload").replace("\\", "/")).name
-            directory = cfg.project_dir / "results/api"
-            directory.mkdir(parents=True, exist_ok=True)
-            temporary_json = directory / f"{request_id}.json.part"
-            temporary_json.write_text(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
-            temporary_json.replace(directory / f"{request_id}.json")
+                    raise HTTPException(400, str(error), headers={"X-Request-ID": request_id}) from error
+            write_json(cfg.project_dir / "results/api" / f"{request_id}.json", result)
+            response.headers["X-Request-ID"] = request_id
             return result
         finally:
             file.file.close()

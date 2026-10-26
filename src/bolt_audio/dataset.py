@@ -31,6 +31,8 @@ def load_manifest(path: Path, require_ready=False) -> list[dict]:
             raise ValueError(f"{prefix}: invalid split or reviewed flag")
         if require_ready and (not row["reviewed"] or row["split"] == "unassigned"):
             raise ValueError(f"{prefix}: review event intervals and assign train/val/test before extraction")
+        if require_ready and row["group_id"] == "REVIEW_INDEPENDENT_TRIAL":
+            raise ValueError(f"{prefix}: replace placeholder group_id with the actual independent trial/session")
         audio = Path(row["audio"])
         audio = (audio if audio.is_absolute() else path.parent / audio).resolve(strict=True)
         if audio in paths:
@@ -94,6 +96,8 @@ def extract_manifest(manifest: Path, output: Path, extractor: FeatureExtractor):
         splits.extend([row["split"]] * count)
         metadata.append({"recording_id": row["recording_id"], "group_id": row["group_id"],
                          "split": row["split"], "sha256": row["sha256"],
+                         "audio": str(row["path"]), "duration_s": row["duration_s"],
+                         "annotation": row.get("annotation"), "notes": row.get("notes", ""),
                          "quality": result["quality"], "event_intervals": row["intervals"],
                          "total_windows": count, "supervised_windows": int((labels >= 0).sum()),
                          "uncertain_windows": int((labels < 0).sum())})

@@ -1,0 +1,191 @@
+{
+  "mode": "reversible_move",
+  "backup_root": "D:\\project_sound_cleanup_backup\\20261026_training",
+  "entries": [
+    {
+      "path": "research",
+      "file_count": 24,
+      "files": [
+        "research\\audioset_tagging_cnn\\.gitignore",
+        "research\\audioset_tagging_cnn\\LICENSE.MIT",
+        "research\\audioset_tagging_cnn\\README.md",
+        "research\\audioset_tagging_cnn\\requirements.txt",
+        "research\\audioset_tagging_cnn\\metadata\\class_labels_indices.csv",
+        "research\\audioset_tagging_cnn\\pytorch\\evaluate.py",
+        "research\\audioset_tagging_cnn\\pytorch\\finetune_template.py",
+        "research\\audioset_tagging_cnn\\pytorch\\inference.py",
+        "research\\audioset_tagging_cnn\\pytorch\\losses.py",
+        "research\\audioset_tagging_cnn\\pytorch\\main.py",
+        "research\\audioset_tagging_cnn\\pytorch\\models.py",
+        "research\\audioset_tagging_cnn\\pytorch\\pytorch_utils.py",
+        "research\\audioset_tagging_cnn\\pytorch\\__pycache__\\evaluate.cpython-312.pyc",
+        "research\\audioset_tagging_cnn\\pytorch\\__pycache__\\losses.cpython-312.pyc",
+        "research\\audioset_tagging_cnn\\pytorch\\__pycache__\\models.cpython-312.pyc",
+        "research\\audioset_tagging_cnn\\pytorch\\__pycache__\\pytorch_utils.cpython-312.pyc",
+        "research\\audioset_tagging_cnn\\utils\\config.py",
+        "research\\audioset_tagging_cnn\\utils\\create_indexes.py",
+        "research\\audioset_tagging_cnn\\utils\\data_generator.py",
+        "research\\audioset_tagging_cnn\\utils\\dataset.py",
+        "research\\audioset_tagging_cnn\\utils\\utilities.py",
+        "research\\audioset_tagging_cnn\\utils\\__pycache__\\config.cpython-312.pyc",
+        "research\\audioset_tagging_cnn\\utils\\__pycache__\\data_generator.cpython-312.pyc",
+        "research\\audioset_tagging_cnn\\utils\\__pycache__\\utilities.cpython-312.pyc"
+      ],
+      "bytes": 151686.0
+    },
+    {
+      "path": "docs\\legacy",
+      "file_count": 5,
+      "files": [
+        "docs\\legacy\\audioset_tagging_cnn.README.md",
+        "docs\\legacy\\CLEANUP.md",
+        "docs\\legacy\\DEPLOYMENT_CHECK.md",
+        "docs\\legacy\\panns_inference.README.md",
+        "docs\\legacy\\upstream_sources_and_cleanup.json"
+      ],
+      "bytes": 26163.0
+    },
+    {
+      "path": "src\\panns_inference",
+      "file_count": 2,
+      "files": [
+        "src\\panns_inference\\__init__.py",
+        "src\\panns_inference\\__pycache__\\__init__.cpython-312.pyc"
+      ],
+      "bytes": 699.0
+    },
+    {
+      "path": "third_party\\licenses",
+      "file_count": 2,
+      "files": [
+        "third_party\\licenses\\audioset_tagging_cnn.MIT.txt",
+        "third_party\\licenses\\panns_inference.MIT.txt"
+      ],
+      "bytes": 2222.0
+    },
+    {
+      "path": "docs\\ARCHITECTURE.md",
+      "file_count": 1,
+      "files": [
+        "docs\\ARCHITECTURE.md"
+      ],
+      "bytes": 3396.0
+    },
+    {
+      "path": "docs\\INTEGRATION.md",
+      "file_count": 1,
+      "files": [
+        "docs\\INTEGRATION.md"
+      ],
+      "bytes": 2887.0
+    },
+    {
+      "path": "docs\\LOCAL_CHECK.md",
+      "file_count": 1,
+      "files": [
+        "docs\\LOCAL_CHECK.md"
+      ],
+      "bytes": 4142.0
+    },
+    {
+      "path": "Dockerfile",
+      "file_count": 1,
+      "files": [
+        "Dockerfile"
+      ],
+      "bytes": 604.0
+    },
+    {
+      "path": ".dockerignore",
+      "file_count": 1,
+      "files": [
+        ".dockerignore"
+      ],
+      "bytes": 89.0
+    },
+    {
+      "path": "requirements.txt",
+      "file_count": 1,
+      "files": [
+        "requirements.txt"
+      ],
+      "bytes": 216.0
+    }
+  ],
+  "pruned_code": {
+    "models.py": {
+      "lines_before": 3316,
+      "lines_after": 260,
+      "retained_symbols": [
+        "Cnn14",
+        "Cnn14_DecisionLevelMax",
+        "ConvBlock",
+        "init_bn",
+        "init_layer"
+      ],
+      "removed_symbols": [
+        "AttBlock",
+        "Cnn10",
+        "Cnn14_16k",
+        "Cnn14_8k",
+        "Cnn14_DecisionLevelAtt",
+        "Cnn14_DecisionLevelAvg",
+        "Cnn14_emb128",
+        "Cnn14_emb32",
+        "Cnn14_emb512",
+        "Cnn14_mel128",
+        "Cnn14_mel32",
+        "Cnn14_mixup_time_domain",
+        "Cnn14_no_dropout",
+        "Cnn14_no_specaug",
+        "Cnn6",
+        "ConvBlock5x5",
+        "ConvPreWavBlock",
+        "DaiNet19",
+        "DaiNetResBlock",
+        "InvertedResidual",
+        "LeeNet11",
+        "LeeNet24",
+        "LeeNetConvBlock",
+        "LeeNetConvBlock2",
+        "MobileNetV1",
+        "MobileNetV2",
+        "Res1dNet31",
+        "Res1dNet51",
+        "ResNet22",
+        "ResNet38",
+        "ResNet54",
+        "Wavegram_Cnn14",
+        "Wavegram_Logmel128_Cnn14",
+        "Wavegram_Logmel_Cnn14",
+        "_ResNet",
+        "_ResNetWav1d",
+        "_ResnetBasicBlock",
+        "_ResnetBasicBlockWav1d",
+        "_ResnetBottleneck",
+        "_resnet_conv1x1",
+        "_resnet_conv1x1_wav1d",
+        "_resnet_conv3x1_wav1d",
+        "_resnet_conv3x3"
+      ],
+      "retained_bodies_unchanged": true
+    },
+    "pytorch_utils.py": {
+      "lines_before": 251,
+      "lines_after": 52,
+      "retained_symbols": [
+        "do_mixup",
+        "interpolate",
+        "pad_framewise_output"
+      ],
+      "removed_symbols": [
+        "append_to_dict",
+        "count_flops",
+        "count_parameters",
+        "forward",
+        "move_data_to_device"
+      ],
+      "retained_bodies_unchanged": true
+    }
+  }
+}

@@ -20,5 +20,9 @@ artifacts/*
 !artifacts/.gitkeep
 results/*
 !results/.gitkeep
+logs/
+data/labels/*
+!data/labels/.gitkeep
+*.jsonl.bak
 *.part
 .env

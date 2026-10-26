@@ -91,6 +91,6 @@ class FeatureExtractor:
         return {
             "features": features, "quality": quality,
             "start_s": np.asarray(starts, dtype=np.float64) / cfg.sample_rate,
-            "end_s": np.minimum(np.asarray(starts) + window, len(waveform)) / cfg.sample_rate,
+            "end_s": np.minimum((np.asarray(starts) + window) / cfg.sample_rate, quality["duration_seconds"]),
             "tag_scores": np.concatenate(all_tags) if all_tags else None,
         }

@@ -9,6 +9,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, confusion_matrix, f1_score, precision_score, recall_score
 from sklearn.preprocessing import StandardScaler
 
+from .evaluation import event_metrics
+from .reporting import write_json
+
 
 def merge_windows(starts, ends, scores, threshold, gap, min_windows):
     groups = []
@@ -47,6 +50,16 @@ def recording_metrics(y, scores, ids, starts, ends, threshold, gap, min_windows)
     return metrics(truth, predicted)
 
 
+def temporal_metrics(scores, ids, starts, ends, records, threshold, gap, min_windows, event_iou):
+    predictions = {}
+    for recording in np.unique(ids):
+        mask = ids == recording
+        order = np.argsort(starts[mask])
+        predictions[str(recording)] = merge_windows(starts[mask][order], ends[mask][order], scores[mask][order],
+                                                   threshold, gap, min_windows)
+    return event_metrics(predictions, records, event_iou)
+
+
 class LinearClassifier:
     """JSON persistence avoids pickle; only numerical preprocessing and classifier parameters are loaded."""
 
@@ -79,7 +92,9 @@ class LinearClassifier:
         return expit(((features - self.mean) / self.scale) @ self.coefficient + self.intercept)
 
 
-def train_classifier(cache_path: Path, output: Path, gap=0.25, min_windows=1):
+def train_classifier(cache_path: Path, output: Path, gap=0.25, min_windows=1, event_iou=0.3):
+    if not np.isfinite(event_iou) or not 0 < event_iou <= 1:
+        raise ValueError("event_iou must be finite and in (0, 1]")
     with np.load(cache_path, allow_pickle=False) as cache:
         X, y = cache["X"], cache["y"]
         splits, ids, groups = cache["split"], cache["recording_id"], cache["group_id"]
@@ -118,9 +133,12 @@ def train_classifier(cache_path: Path, output: Path, gap=0.25, min_windows=1):
     scores = model.predict_proba(scaler.transform(X))[:, 1]
     candidates = np.unique(np.r_[0.0, np.quantile(scores[val], np.linspace(0, 1, 201)), 1.0])
     best = None
+    val_records = [record for record in records if record["split"] == "val"]
     for threshold in candidates:
         report = recording_metrics(y[val], scores[val], ids[val], starts[val], ends[val], threshold, gap, min_windows)
-        rank = (report["f1"], report["precision"], report["recall"], float(threshold))
+        temporal = temporal_metrics(scores[val], ids[val], starts[val], ends[val], val_records,
+                                    threshold, gap, min_windows, event_iou)
+        rank = (temporal["f1"], report["f1"], temporal["precision"], report["precision"], float(threshold))
         if best is None or rank > best[0]:
             best = (rank, float(threshold))
     threshold = best[1]
@@ -134,6 +152,9 @@ def train_classifier(cache_path: Path, output: Path, gap=0.25, min_windows=1):
                 if supervised.any() else {"count": 0},
                 "recording": recording_metrics(y[mask], scores[mask], ids[mask], starts[mask], ends[mask],
                                                threshold, gap, min_windows),
+                "event": temporal_metrics(scores[mask], ids[mask], starts[mask], ends[mask],
+                                          [record for record in records if record["split"] == split],
+                                          threshold, gap, min_windows, event_iou),
                 "group_count": len(np.unique(groups[mask])),
             }
     artifact = {
@@ -141,12 +162,13 @@ def train_classifier(cache_path: Path, output: Path, gap=0.25, min_windows=1):
         "feature_spec": spec, "mean": scaler.mean_.tolist(), "scale": scaler.scale_.tolist(),
         "coefficient": model.coef_[0].tolist(), "intercept": float(model.intercept_[0]),
         "threshold": threshold, "merge_gap_seconds": gap, "min_positive_windows": min_windows,
-        "threshold_selection": "maximum validation recording F1; precision breaks ties; test unused",
+        "threshold_selection": "maximum validation event F1; recording F1 then precision break ties; test unused",
+        "event_iou": event_iou,
         "uncertain_windows": "Excluded from fitting/window metrics; included in recording-level alarm evaluation",
         "deployment_validated": False, "reports": reports, "training_records": records,
         "notice": "Prototype. Validation selected the threshold; test is the independent estimate. Overlapping windows are correlated.",
     }
     output.mkdir(parents=True, exist_ok=True)
-    (output / "classifier.json").write_text(json.dumps(artifact, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
-    (output / "metrics.json").write_text(json.dumps(reports, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json(output / "classifier.json", artifact)
+    write_json(output / "metrics.json", reports)
     return artifact

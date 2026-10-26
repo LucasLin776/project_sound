@@ -11,40 +11,14 @@ import time
 from pathlib import Path
 
 from bolt_audio.config import project_root
+from bolt_audio.audio import read_audio, window_starts
 
 import librosa
 import numpy as np
-import soundfile as sf
 import torch
 
 ROOT = project_root()
 SAMPLE_RATE = 32000
-
-
-def window_starts(samples: int, window: int, hop: int) -> list[int]:
-    if samples <= 0 or window <= 0 or hop <= 0 or hop > window:
-        raise ValueError("Require nonempty audio and 0 < hop <= window")
-    last = max(0, samples - window)
-    starts = list(range(0, last + 1, hop))
-    if starts[-1] != last:
-        starts.append(last)
-    return starts
-
-
-def audio_quality(audio: np.ndarray, info) -> dict:
-    bits = {"PCM_16": 16, "PCM_24": 24, "PCM_32": 32, "PCM_U8": 8}.get(info.subtype)
-    positive_rail = 1 - 2 ** (1 - bits) if bits else 1.0
-    rail_fraction = float(np.mean((audio <= -1.0) | (audio >= positive_rail)))
-    return {
-        "sample_rate": info.samplerate,
-        "channels": info.channels,
-        "subtype": info.subtype,
-        "duration_seconds": len(audio) / info.samplerate,
-        "peak_amplitude": float(np.abs(audio).max()),
-        "rms_dbfs": float(20 * np.log10(max(float(np.sqrt(np.mean(audio.astype(np.float64) ** 2))), 1e-12))),
-        "full_scale_sample_fraction": rail_fraction,
-        "clipping_warning": rail_fraction > 0.001,
-    }
 
 
 def top_tags(scores: np.ndarray, labels: list[str], top_k: int = 10) -> list[dict]:
@@ -106,18 +80,10 @@ def main() -> None:
         parser.error("CUDA is unavailable; use --device cpu")
     torch.set_num_threads(args.threads)
     started = time.perf_counter()
-    from panns_inference import AudioTagging, SoundEventDetection, labels
+    from .vendor.panns.inference import AudioTagging, SoundEventDetection, labels
 
     source = args.audio.resolve(strict=True)
-    info = sf.info(source)
-    original, sr = sf.read(source, dtype="float32", always_2d=True)
-    if not len(original) or not np.isfinite(original).all():
-        raise ValueError("Audio must contain finite, nonempty samples")
-    quality = audio_quality(original, info)
-    waveform = original.mean(axis=1)
-    if sr != SAMPLE_RATE:
-        waveform = librosa.resample(waveform, orig_sr=sr, target_sr=SAMPLE_RATE)
-    waveform = np.ascontiguousarray(waveform, dtype=np.float32)
+    waveform, quality = read_audio(source, SAMPLE_RATE)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     result = {
         "audio": str(source),
