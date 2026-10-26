@@ -17,6 +17,8 @@
 
 ## 建议阅读顺序
 
+本次新增的手动冒烟入口为`scripts/smoke_train.py`，运行说明见`docs/SMOKE_TEST.md`。先读`preflight`了解只读预检，再读`run_smoke`跟踪`extract_manifest → train_classifier(smoke_test=True) → LinearClassifier.load → BoltDetector.detect`。冒烟模式使用固定阈值0.5、不评估准确率；常规训练的独立验证要求保持启用。
+
 所有路径相对于 `D:\project_sound`。先读项目主链路，再读 vendor 的底层网络。
 
 | 顺序 | 文件 / 主要函数 | 你要理解的内容 |

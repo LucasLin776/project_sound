@@ -19,11 +19,12 @@ class UntrainedDetectorError(RuntimeError):
 
 
 class BoltDetector:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, *, allow_smoke_test=False):
         started = time.perf_counter()
         self.settings = settings
         self.extractor = FeatureExtractor(settings)
-        self.classifier = LinearClassifier.load(settings.classifier_path) if settings.classifier_path else None
+        self.classifier = (LinearClassifier.load(settings.classifier_path, allow_smoke_test=allow_smoke_test)
+                           if settings.classifier_path else None)
         self.classifier_sha256 = file_sha256(settings.classifier_path) if settings.classifier_path else None
         if self.classifier is not None and self.classifier.artifact["feature_spec"] != self.extractor.spec:
             raise ValueError("Classifier feature specification differs from runtime settings/checkpoint")

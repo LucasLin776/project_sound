@@ -83,8 +83,11 @@ class LinearClassifier:
             raise ValueError("Invalid classifier alarm settings")
 
     @classmethod
-    def load(cls, path: Path):
-        return cls(json.loads(path.read_text(encoding="utf-8")))
+    def load(cls, path: Path, *, allow_smoke_test=False):
+        artifact = json.loads(path.read_text(encoding="utf-8"))
+        if artifact.get("smoke_test_only") and not allow_smoke_test:
+            raise ValueError("This classifier is for smoke tests only; use scripts/smoke_train.py to exercise it.")
+        return cls(artifact)
 
     def predict_scores(self, features):
         if features.ndim != 2 or features.shape[1] != len(self.mean) or not np.isfinite(features).all():
@@ -92,7 +95,7 @@ class LinearClassifier:
         return expit(((features - self.mean) / self.scale) @ self.coefficient + self.intercept)
 
 
-def train_classifier(cache_path: Path, output: Path, gap=0.25, min_windows=1, event_iou=0.3):
+def train_classifier(cache_path: Path, output: Path, gap=0.25, min_windows=1, event_iou=0.3, *, smoke_test=False):
     if not np.isfinite(event_iou) or not 0 < event_iou <= 1:
         raise ValueError("event_iou must be finite and in (0, 1]")
     with np.load(cache_path, allow_pickle=False) as cache:
@@ -117,12 +120,16 @@ def train_classifier(cache_path: Path, output: Path, gap=0.25, min_windows=1, ev
         if previous != record["split"]:
             raise ValueError("Identical audio leaks across dataset splits")
     train, val = (splits == "train") & (y >= 0), splits == "val"
-    for name, mask in [("train", train), ("val", val)]:
+    if smoke_test and set(splits) != {"train"}:
+        raise ValueError("Smoke tests require a train-only cache; validation and test data must not be used")
+    required = [("train", train)] if smoke_test else [("train", train), ("val", val)]
+    for name, mask in required:
         if set(y[mask & (y >= 0)]) != {0, 1}:
             raise ValueError(f"The {name} split must have both positive and negative windows")
-    val_truth = [int(y[val & (ids == recording)].max()) for recording in np.unique(ids[val])]
-    if set(val_truth) != {0, 1}:
-        raise ValueError("Validation must contain both event recordings and fully negative recordings")
+    if not smoke_test:
+        val_truth = [int(y[val & (ids == recording)].max()) for recording in np.unique(ids[val])]
+        if set(val_truth) != {0, 1}:
+            raise ValueError("Validation must contain both event recordings and fully negative recordings")
     scaler = StandardScaler().fit(X[train])
     # Equal recording contributions avoid overweighting long recordings with many correlated windows.
     train_ids = ids[train]
@@ -131,44 +138,53 @@ def train_classifier(cache_path: Path, output: Path, gap=0.25, min_windows=1, ev
     model = LogisticRegression(C=1.0, class_weight="balanced", max_iter=2000, random_state=42)
     model.fit(scaler.transform(X[train]), y[train], sample_weight=weights)
     scores = model.predict_proba(scaler.transform(X))[:, 1]
-    candidates = np.unique(np.r_[0.0, np.quantile(scores[val], np.linspace(0, 1, 201)), 1.0])
-    best = None
-    val_records = [record for record in records if record["split"] == "val"]
-    for threshold in candidates:
-        report = recording_metrics(y[val], scores[val], ids[val], starts[val], ends[val], threshold, gap, min_windows)
-        temporal = temporal_metrics(scores[val], ids[val], starts[val], ends[val], val_records,
-                                    threshold, gap, min_windows, event_iou)
-        rank = (temporal["f1"], report["f1"], temporal["precision"], report["precision"], float(threshold))
-        if best is None or rank > best[0]:
-            best = (rank, float(threshold))
-    threshold = best[1]
+    threshold = .5
     reports = {}
-    for split in ("train", "val", "test"):
-        mask = splits == split
-        if mask.any():
-            supervised = mask & (y >= 0)
-            reports[split] = {
-                "window": metrics(y[supervised], scores[supervised] >= threshold, scores[supervised])
-                if supervised.any() else {"count": 0},
-                "recording": recording_metrics(y[mask], scores[mask], ids[mask], starts[mask], ends[mask],
-                                               threshold, gap, min_windows),
-                "event": temporal_metrics(scores[mask], ids[mask], starts[mask], ends[mask],
-                                          [record for record in records if record["split"] == split],
-                                          threshold, gap, min_windows, event_iou),
-                "group_count": len(np.unique(groups[mask])),
-            }
+    if not smoke_test:
+        candidates = np.unique(np.r_[0.0, np.quantile(scores[val], np.linspace(0, 1, 201)), 1.0])
+        best = None
+        val_records = [record for record in records if record["split"] == "val"]
+        for candidate in candidates:
+            report = recording_metrics(y[val], scores[val], ids[val], starts[val], ends[val], candidate, gap, min_windows)
+            temporal = temporal_metrics(scores[val], ids[val], starts[val], ends[val], val_records,
+                                        candidate, gap, min_windows, event_iou)
+            rank = (temporal["f1"], report["f1"], temporal["precision"], report["precision"], float(candidate))
+            if best is None or rank > best[0]:
+                best = (rank, float(candidate))
+        threshold = best[1]
+        for split in ("train", "val", "test"):
+            mask = splits == split
+            if mask.any():
+                supervised = mask & (y >= 0)
+                reports[split] = {
+                    "window": metrics(y[supervised], scores[supervised] >= threshold, scores[supervised])
+                    if supervised.any() else {"count": 0},
+                    "recording": recording_metrics(y[mask], scores[mask], ids[mask], starts[mask], ends[mask],
+                                                   threshold, gap, min_windows),
+                    "event": temporal_metrics(scores[mask], ids[mask], starts[mask], ends[mask],
+                                              [record for record in records if record["split"] == split],
+                                              threshold, gap, min_windows, event_iou),
+                    "group_count": len(np.unique(groups[mask])),
+                }
     artifact = {
         "schema_version": 1, "model_type": "standard_scaler_logistic_regression",
         "feature_spec": spec, "mean": scaler.mean_.tolist(), "scale": scaler.scale_.tolist(),
         "coefficient": model.coef_[0].tolist(), "intercept": float(model.intercept_[0]),
         "threshold": threshold, "merge_gap_seconds": gap, "min_positive_windows": min_windows,
-        "threshold_selection": "maximum validation event F1; recording F1 then precision break ties; test unused",
+        "threshold_selection": "fixed 0.5 for train-only smoke test; no performance evaluation" if smoke_test else
+        "maximum validation event F1; recording F1 then precision break ties; test unused",
+        "smoke_test_only": bool(smoke_test),
         "event_iou": event_iou,
         "uncertain_windows": "Excluded from fitting/window metrics; included in recording-level alarm evaluation",
         "deployment_validated": False, "reports": reports, "training_records": records,
-        "notice": "Prototype. Validation selected the threshold; test is the independent estimate. Overlapping windows are correlated.",
+        "notice": "Pipeline smoke test only. No independent validation or accuracy estimate." if smoke_test else
+        "Prototype. Validation selected the threshold; test is the independent estimate. Overlapping windows are correlated.",
     }
     output.mkdir(parents=True, exist_ok=True)
     write_json(output / "classifier.json", artifact)
-    write_json(output / "metrics.json", reports)
+    write_json(output / "metrics.json", {
+        "smoke_test_only": True, "performance_evaluated": False,
+        "reason": "Train-only pipeline check; fixed threshold 0.5; no validation/test metrics.",
+        "training_windows": int(train.sum()), "feature_dimensions": X.shape[1],
+    } if smoke_test else reports)
     return artifact
