@@ -73,14 +73,15 @@ def test_split_is_reproducible_and_keeps_pairs_together():
         assert by_id[f"{index:02d}"] == by_id[f"{index + 1:02d}"]
 
 
-def make_manifest(tmp_path):
+def make_manifest(tmp_path, *, related=False):
     rng = np.random.default_rng(44)
     rows = []
     for split in ("train", "val", "test"):
         for label in (0, 1):
             name = f"{split}_{label}.wav"
             sf.write(tmp_path / name, rng.normal(0, .01, 128000), 32000)
-            rows.append({"recording_id": name, "audio": name, "group_id": "same_source_group", "split": split,
+            group = "same_source_group" if related else f"source_{split}"
+            rows.append({"recording_id": name, "audio": name, "group_id": group, "split": split,
                          "reviewed": True, "pipeline_test": True,
                          "events": [{"start_s": 1., "end_s": 2.}] if label else []})
     path = tmp_path / "all.jsonl"
@@ -95,11 +96,12 @@ def test_full_preflight_accepts_three_splits_without_loading_model(tmp_path):
     assert len(rows) == 6 and plan["planned_windows"] == 30
     assert plan["training_started"] is False and plan["model_initialized"] is False
     assert plan["performance_evaluation"] is True
+    assert plan["allow_related_splits"] is False
     assert all(counts["positive"] == counts["negative"] == 1 for counts in plan["split_counts"].values())
 
 
 def test_related_opt_in_preserves_other_manifest_checks(tmp_path):
-    manifest, _ = make_manifest(tmp_path)
+    manifest, _ = make_manifest(tmp_path, related=True)
     with pytest.raises(ValueError, match="group_id crosses splits"):
         load_manifest(manifest, require_ready=True)
     assert len(load_manifest(manifest, require_ready=True, allow_related_splits=True)) == 6
@@ -121,6 +123,29 @@ def test_full_check_only_prints_chinese_and_never_calls_runner(tmp_path, capsys)
     assert "数据与环境预检通过" in text and "训练集：2条，正例1条，反例1条" in text
     assert "验证集：2条" in text and "测试集：2条" in text
     assert not output.exists()
+
+
+def test_full_entry_requires_explicit_opt_in_for_related_sources(tmp_path):
+    manifest, _ = make_manifest(tmp_path, related=True)
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"project_dir": str(tmp_path), "checkpoint_dir": str(tmp_path),
+                                  "feature_set": "acoustic"}), encoding="utf-8")
+    args = ["--config", str(config), "--manifest", str(manifest), "--check-only"]
+    with patch.object(full, "run_full", side_effect=AssertionError("不得开始训练")):
+        with pytest.raises(ValueError, match="group_id crosses splits"):
+            full.main(args)
+        assert full.main([*args, "--allow-related-splits"]) == 0
+
+
+@pytest.mark.parametrize("field", ["source_ids", "source_group_ids", "source_sha256"])
+def test_preflight_rejects_shared_original_even_with_separate_output_groups(tmp_path, field):
+    manifest, rows = make_manifest(tmp_path)
+    rows[0][field] = ["shared_original"]
+    rows[2][field] = ["shared_original"]
+    manifest.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    settings = Settings(project_dir=tmp_path, checkpoint_dir=tmp_path, feature_set="acoustic")
+    with pytest.raises(ValueError, match="原始来源跨集合"):
+        full.preflight(settings, manifest, full_data=True)
 
 
 def test_full_preflight_requires_both_classes_in_each_split(tmp_path):

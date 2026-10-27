@@ -13,13 +13,21 @@ from pathlib import Path
 from uuid import uuid4
 
 
-def preflight(settings, manifest: Path, *, full_data=False) -> tuple[list[dict], dict]:
+def preflight(settings, manifest: Path, *, full_data=False, allow_related_splits=False) -> tuple[list[dict], dict]:
     """Read configuration, metadata and WAV headers; do not instantiate a model or fit anything."""
     import numpy as np
     from bolt_audio.audio import window_starts
     from bolt_audio.dataset import load_manifest, window_labels
 
-    rows = load_manifest(manifest.resolve(strict=True), require_ready=True, allow_related_splits=full_data)
+    rows = load_manifest(manifest.resolve(strict=True), require_ready=True, allow_related_splits=allow_related_splits)
+    if not allow_related_splits:
+        sources = {}
+        for row in rows:
+            for field in ("source_ids", "source_group_ids", "source_sha256"):
+                for source in row.get(field, []):
+                    previous = sources.setdefault((field, source), row["split"])
+                    if previous != row["split"]:
+                        raise ValueError(f"原始来源跨集合：{field}={source}（{previous}，{row['split']}）")
     expected = {"train", "val", "test"} if full_data else {"train"}
     if {row["split"] for row in rows} != expected:
         raise ValueError("全量清单必须同时包含训练集、验证集、测试集" if full_data else "冒烟清单只能包含训练集录音")
@@ -59,6 +67,8 @@ def preflight(settings, manifest: Path, *, full_data=False) -> tuple[list[dict],
         "checkpoint": str(checkpoint) if checkpoint else None,
         "recordings": len(rows), "positive_recordings": sum(classes),
         "negative_recordings": len(rows) - sum(classes),
+        "multi_event_recordings": sum(len(row["events"]) > 1 for row in rows),
+        "allow_related_splits": bool(allow_related_splits),
         "recording_ids": [row["recording_id"] for row in rows],
         "planned_windows": len(all_labels),
         "planned_window_labels": {str(label): all_labels.count(label) for label in (-1, 0, 1)},
@@ -86,6 +96,9 @@ def print_plan(plan: dict) -> None:
     features = {"fusion": "PANNs深度特征 + 时频统计", "panns": "PANNs深度特征", "acoustic": "时频统计"}
     print(f"特征方案：{features[plan['feature_set']]}，设备：{plan['device']}")
     print(f"录音总数：{plan['recordings']}，正例：{plan['positive_recordings']}，反例：{plan['negative_recordings']}")
+    print(f"含多个故障时间段的录音：{plan['multi_event_recordings']}条")
+    print("来源隔离：允许相关来源跨集合（仅供历史流程测试）" if plan["allow_related_splits"]
+          else "来源隔离：已启用，原始来源不得跨集合")
     for split, counts in plan["split_counts"].items():
         name = {"train": "训练集", "val": "验证集", "test": "测试集"}[split]
         print(f"{name}：{counts['recordings']}条，正例{counts['positive']}条，反例{counts['negative']}条")

@@ -4,7 +4,7 @@
 
 输入一条 WAV，输出是否掉落、发生区间，以及检测分数、录音质量和处理耗时。不依赖转速、风速、功率或运行状态。只对录到的音频负责，不覆盖未录音的 90 秒。
 
-**已接入增强训练数据，尚未启动训练，没有训练好的真实螺栓分类器。** `diagnose` 可以立即运行；`infer` 必须加载训练产物，缺少模型时明确报错，HTTP 接口返回 503。
+**已接入15次独立掉落录音对应的新数据批次，共360条，本轮只完成导入和预检。** `diagnose` 可以立即运行；`infer` 必须加载训练产物，缺少模型时明确报错，HTTP 接口返回 503。
 
 ## 1. 环境与立即运行
 
@@ -26,15 +26,15 @@ python scripts/diagnose_audio.py --audio data/reference/bolt_drop.wav --mode bot
 
 通用 AudioSet 标签和 SED 都只用于诊断，不能代替螺栓模型。
 
-### 当前82条数据：手动运行全量训练、验证和测试
+### 当前360条数据：手动运行全量训练、验证和测试
 
-随机均衡批次位于`data/raw/bolt_aug_v2_eq/`，本次按约70%/15%/15%划分，并确保每组都有正反例：
+新批次位于`data/raw/bolt_aug_v3_split/`。先按原始录音来源划分，再仅对训练来源做混合、随机均衡和双故障合成；验证和测试来源只统一音频格式。音频、Audition标签、波形图和时频图均已导入：
 
 | 集合 | 总数 | 正例 | 反例 |
 |---|---:|---:|---:|
-| 训练集 | 58 | 24 | 34 |
-| 验证集 | 12 | 5 | 7 |
-| 测试集 | 12 | 5 | 7 |
+| 训练集 | 350 | 180 | 170 |
+| 验证集 | 5 | 3 | 2 |
+| 测试集 | 5 | 3 | 2 |
 
 在Conda环境中进入`D:\project_sound`，由你手动启动：
 
@@ -42,7 +42,7 @@ python scripts/diagnose_audio.py --audio data/reference/bolt_drop.wav --mode bot
 python scripts/full_test.py
 ```
 
-执行全部82条的PANNs深度特征和时频统计提取、训练集拟合、验证集选阈值、三个集合的指标计算，以及全部82条WAV逐条检测。终端进度、集合数量、结果摘要均使用中文。完成后显示`全量流程测试完成`，结果在`artifacts/full_runs/<本次编号>/`，含模型、指标、82份预测、详细日志和中文CSV汇总。
+执行全部360条的PANNs深度特征和时频统计提取、训练集拟合、验证集选阈值、三个集合的指标计算，以及全部360条WAV逐条检测。训练集含18条双故障正例，每条保留两个时间标注。终端进度、集合数量、结果摘要均使用中文。完成后显示`全量流程测试完成`，结果在`artifacts/full_runs/<本次编号>/`，含模型、指标、360份预测、详细日志和中文CSV汇总。
 
 只检查数据和环境：
 
@@ -50,9 +50,9 @@ python scripts/full_test.py
 python scripts/full_test.py --check-only
 ```
 
-完整清单是`data/manifests/bolt_aug_v2_eq_all.jsonl`；训练/验证/测试分别为`bolt_aug_v2_eq_train.jsonl`、`bolt_aug_v2_eq_val.jsonl`、`bolt_aug_v2_eq_test.jsonl`。划分种子固定为20261026，配对正反例留在同一集合。详细步骤见[全量流程测试指南](docs/FULL_TEST.md)。
+完整清单是`data/manifests/bolt_aug_v3_split_all.jsonl`；训练/验证/测试分别为`bolt_aug_v3_split_train.jsonl`、`bolt_aug_v3_split_val.jsonl`、`bolt_aug_v3_split_test.jsonl`。来源划分与训练清单打乱的种子固定为20261027，导入保留增强项目的划分和顺序。默认启用来源隔离检查。详细步骤见[全量训练指南](docs/FULL_TEST.md)。
 
-旧的6条小规模入口`python scripts/smoke_train.py`保留，终端提示也已改为中文。本次代码准备和划分没有启动训练。
+旧82条批次、已有训练结果和6条小规模入口`python scripts/smoke_train.py`保留。新批次使用上面的全量入口，无需重新标注或重新划分。
 
 ## 2. 标注、训练、检测
 

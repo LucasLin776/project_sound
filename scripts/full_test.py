@@ -39,7 +39,10 @@ def run_full(settings, manifest: Path, rows: list[dict], plan: dict, output: Pat
     output.mkdir(parents=True, exist_ok=False)
     started = time.perf_counter()
     completed = []
-    report = {"status": "running", "purpose": "pipeline_test", "recordings": len(rows),
+    allow_related = plan["allow_related_splits"]
+    purpose = "pipeline_test" if allow_related else "dataset_split_training"
+    report = {"status": "running", "purpose": purpose, "recordings": len(rows),
+              "allow_related_splits": allow_related,
               "source_manifest": str(manifest), "output": str(output), "steps_completed": completed}
     write_json(output / "RUNNING.json", report)
     write_json(output / "plan.json", plan)
@@ -47,7 +50,7 @@ def run_full(settings, manifest: Path, rows: list[dict], plan: dict, output: Pat
         print(f"\n[1/4] 正在提取全部{len(rows)}条录音的特征……", flush=True)
         cache = output / "features.npz"
         extractor = FeatureExtractor(settings)
-        extraction = extract_manifest(manifest, cache, extractor, allow_related_splits=True)
+        extraction = extract_manifest(manifest, cache, extractor, allow_related_splits=allow_related)
         del extractor
         gc.collect()
         with np.load(cache, allow_pickle=False) as values:
@@ -61,7 +64,7 @@ def run_full(settings, manifest: Path, rows: list[dict], plan: dict, output: Pat
         with warnings.catch_warnings(record=True) as captured:
             warnings.simplefilter("always")
             artifact = train_classifier(cache, model_dir, settings.merge_gap_seconds,
-                                        settings.min_positive_windows, allow_related_splits=True)
+                                        settings.min_positive_windows, allow_related_splits=allow_related)
         if captured:
             write_json(output / "training_warnings.json", [
                 {"category": warning.category.__name__, "message": str(warning.message)} for warning in captured])
@@ -129,13 +132,14 @@ def main(argv=None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=project / "configs/default.json", help="项目配置文件")
-    parser.add_argument("--manifest", type=Path, default=project / "data/manifests/bolt_aug_v2_eq_all.jsonl", help="完整划分清单")
+    parser.add_argument("--manifest", type=Path, default=project / "data/manifests/bolt_aug_v3_split_all.jsonl", help="完整划分清单")
     parser.add_argument("--output-dir", type=Path, help="新输出目录，默认位于artifacts/full_runs下")
     parser.add_argument("--check-only", action="store_true", help="只读检查三组数据、环境和权重，不提取特征、不训练")
+    parser.add_argument("--allow-related-splits", action="store_true", help="仅用于复现旧批次流程测试，允许相关来源跨集合")
     args = parser.parse_args(argv)
     settings = Settings.load(args.config.resolve())
     manifest = args.manifest.resolve(strict=True)
-    rows, plan = preflight(settings, manifest, full_data=True)
+    rows, plan = preflight(settings, manifest, full_data=True, allow_related_splits=args.allow_related_splits)
     print_plan(plan)
     if args.check_only:
         return 0
