@@ -3,10 +3,8 @@ from __future__ import annotations
 
 import argparse
 import gc
-import math
 import sys
 import time
-from dataclasses import replace
 from datetime import datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -107,31 +105,11 @@ def print_plan(plan: dict) -> None:
     print("预检未初始化特征模型，未提取特征，未启动训练。", flush=True)
 
 
-def validate_detection_result(result: dict) -> None:
-    """Success concerns executable output and its format, not whether the prediction is correct."""
-    if not {"bolt_detected", "events", "score", "quality", "processing_seconds"} <= result.keys():
-        raise ValueError("检测结果缺少必要字段")
-    if type(result["bolt_detected"]) is not bool or not isinstance(result["events"], list):
-        raise ValueError("检测结果字段类型不正确")
-    if result["bolt_detected"] != bool(result["events"]):
-        raise ValueError("检测标志与事件列表不一致")
-    if not math.isfinite(result["score"]) or not 0 <= result["score"] <= 1:
-        raise ValueError("检测分数无效")
-    if not math.isfinite(result["processing_seconds"]) or result["processing_seconds"] < 0:
-        raise ValueError("检测耗时无效")
-    duration = result["quality"]["duration_seconds"]
-    for event in result["events"]:
-        if not (0 <= event["start_s"] < event["end_s"] <= duration
-                and math.isfinite(event["score"]) and 0 <= event["score"] <= 1):
-            raise ValueError("事件超出录音范围，或事件分数无效")
-
-
 def run_smoke(settings, manifest: Path, rows: list[dict], plan: dict, output: Path) -> dict:
-    """Called only by the user without --check-only; reuse the actual extract/train/detect path."""
+    """Called only by the user without --check-only; check extraction, fitting and model reload."""
     import numpy as np
     from bolt_audio.classifier import LinearClassifier, train_classifier
     from bolt_audio.dataset import extract_manifest
-    from bolt_audio.detector import BoltDetector
     from bolt_audio.features import FeatureExtractor
     from bolt_audio.reporting import write_json
 
@@ -143,7 +121,7 @@ def run_smoke(settings, manifest: Path, rows: list[dict], plan: dict, output: Pa
     report = {"status": "running", "smoke_test_only": True, "performance_evaluated": False,
               "manifest": str(manifest.resolve()), "output": str(output.resolve()), "steps_completed": completed}
     try:
-        print(f"[1/4] 正在从{len(rows)}条录音提取特征……", flush=True)
+        print(f"[1/3] 正在从{len(rows)}条录音提取特征……", flush=True)
         cache = output / "features.npz"
         extractor = FeatureExtractor(settings)
         extraction = extract_manifest(manifest, cache, extractor)
@@ -155,13 +133,13 @@ def run_smoke(settings, manifest: Path, rows: list[dict], plan: dict, output: Pa
             raise ValueError("特征缓存维数不符合预期，或含有无效数值")
         completed.append("feature_extraction")
 
-        print("[2/4] 正在拟合标准化参数和分类器，阈值固定为0.5……", flush=True)
+        print("[2/3] 正在拟合标准化参数和分类器，阈值固定为0.5……", flush=True)
         model_dir = output / "model"
         artifact = train_classifier(cache, model_dir, settings.merge_gap_seconds,
                                     settings.min_positive_windows, smoke_test=True)
         completed.append("training")
 
-        print("[3/4] 正在重新加载模型文件并检查预测分数……", flush=True)
+        print("[3/3] 正在重新加载模型文件并检查预测分数……", flush=True)
         model_path = model_dir / "classifier.json"
         reloaded = LinearClassifier.load(model_path, allow_smoke_test=True)
         scores = reloaded.predict_scores(X)
@@ -171,21 +149,9 @@ def run_smoke(settings, manifest: Path, rows: list[dict], plan: dict, output: Pa
             raise ValueError("模型缺少冒烟测试标记")
         completed.append("model_reload")
 
-        print("[4/4] 正在对一条正例和一条反例执行完整WAV检测……", flush=True)
-        detector = BoltDetector(replace(settings, classifier_path=model_path), allow_smoke_test=True)
-        examples = [next(row for row in rows if row["events"]), next(row for row in rows if not row["events"])]
-        predictions = []
-        for row in examples:
-            result = detector.detect(row["path"], log_path=output / "logs" / f"{row['recording_id']}.json")
-            validate_detection_result(result)
-            destination = output / "predictions" / f"{row['recording_id']}.json"
-            write_json(destination, result)
-            predictions.append({"recording_id": row["recording_id"], "source_has_event": bool(row["events"]),
-                                "bolt_detected": result["bolt_detected"], "result": str(destination.resolve())})
-        completed.append("wav_detection")
         report.update(status="passed", recordings=len(rows), windows=extraction["windows"],
                       feature_dimensions=X.shape[1], threshold=artifact["threshold"],
-                      classifier=str(model_path.resolve()), predictions=predictions,
+                      classifier=str(model_path.resolve()),
                       processing_seconds=time.perf_counter() - started,
                       notice="Pipeline completed. Prediction correctness is not a pass/fail condition.")
         write_json(output / "smoke_report.json", report)
@@ -212,7 +178,7 @@ def main(argv=None) -> int:
     parser.add_argument("--output-dir", type=Path, help="新输出目录，默认位于artifacts/smoke_runs下")
     parser.add_argument("--check-only", action="store_true", help="只读预检，不加载模型、不提取特征、不训练")
     args = parser.parse_args(argv)
-    settings = Settings.load(args.config.resolve(), classifier_path=None)
+    settings = Settings.load(args.config.resolve())
     manifest = args.manifest.resolve(strict=True)
     rows, plan = preflight(settings, manifest)
     print_plan(plan)

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "wind-bolt-audio"
 version = "0.1.0"
-description = "PANNs-based wind turbine bolt sound detection development framework"
+description = "Wind turbine bolt audio training and model export"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
@@ -15,8 +15,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-api = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1", "python-multipart>=0.0.20,<1"]
-dev = ["pytest>=8,<10", "httpx>=0.28,<1", "ruff>=0.11,<1"]
+dev = ["pytest>=8,<10", "ruff>=0.11,<1"]
 
 [project.scripts]
 bolt-audio = "bolt_audio.cli:main"

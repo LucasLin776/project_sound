@@ -1,157 +1,98 @@
-# Acoustic_Deep_Learning — 风机螺栓掉落声音检测
+# 风机螺栓掉落：模型训练项目
 
-基础版本，目前主要用于检测轮毂中螺栓掉落。
+本项目负责标注导入、数据检查、特征提取、模型训练、验证测试和模型包导出。数据增强在`D:\data_process`执行；独立WAV推理和HTTP服务位于`D:\project_sound_inference`。
 
-输入一条 WAV，输出是否掉落、发生区间，以及检测分数、录音质量和处理耗时。不依赖转速、风速、功率或运行状态。只对录到的音频负责，不覆盖未录音的 90 秒。
-
-**已接入15次独立掉落录音对应的新数据批次，共360条，本轮只完成导入和预检。** `diagnose` 可以立即运行；`infer` 必须加载训练产物，缺少模型时明确报错，HTTP 接口返回 503。
-
-## 1. 环境与立即运行
-
-在 Miniconda Prompt 中：
-
-```bat
-conda activate wind-bolt-audio
-cd /d D:\project_sound
-python -m bolt_audio diagnose --audio data/reference/bolt_drop.wav --output results/reference/diagnostics.json
+```text
+D:/data_process              数据准备、来源划分、数据增强
+          ↓ 已标注WAV与train/val/test清单
+D:/project_sound             特征提取、训练与评估、导出模型包
+          ↓ classifier.json + Cnn14权重 + bundle.json
+D:/project_sound_inference   指定 --model，执行WAV/HTTP推理
 ```
 
-在 PowerShell 中切换目录使用 `cd D:\project_sound`。现有环境位置、重建方法见 [Conda 说明](docs/CONDA.md)。
+## 1. 当前数据与训练
 
-需要波形、STFT 时频图辅助查看时：
+默认第二版：第一批15条加第二批19条独立故障来源，第二批原编号19按要求排除。已有数据、划分和训练结果保留。
 
-```bat
-python scripts/diagnose_audio.py --audio data/reference/bolt_drop.wav --mode both --output-dir results/reference
-```
-
-通用 AudioSet 标签和 SED 都只用于诊断，不能代替螺栓模型。
-
-### 当前360条数据：手动运行全量训练、验证和测试
-
-新批次位于`data/raw/bolt_aug_v3_split/`。先按原始录音来源划分，再仅对训练来源做混合、随机均衡和双故障合成；验证和测试来源只统一音频格式。音频、Audition标签、波形图和时频图均已导入：
-
-| 集合 | 总数 | 正例 | 反例 |
+| 集合 | 正例 | 反例 | 合计 |
 |---|---:|---:|---:|
-| 训练集 | 350 | 180 | 170 |
-| 验证集 | 5 | 3 | 2 |
-| 测试集 | 5 | 3 | 2 |
+| 训练集 | 400 | 400 | 800 |
+| 验证集 | 7 | 2 | 9 |
+| 测试集 | 7 | 2 | 9 |
 
-在Conda环境中进入`D:\project_sound`，由你手动启动：
+数据在`data/raw/bolt_dataset_v2/`，总清单为`data/manifests/bolt_dataset_v2_all.jsonl`。每组含两批来源，只有训练集增强。
 
-```bat
-python scripts/full_test.py
-```
-
-执行全部360条的PANNs深度特征和时频统计提取、训练集拟合、验证集选阈值、三个集合的指标计算，以及全部360条WAV逐条检测。训练集含18条双故障正例，每条保留两个时间标注。终端进度、集合数量、结果摘要均使用中文。完成后显示`全量流程测试完成`，结果在`artifacts/full_runs/<本次编号>/`，含模型、指标、360份预测、详细日志和中文CSV汇总。
-
-只检查数据和环境：
-
-```bat
+```powershell
+conda activate wind-bolt-audio
+cd D:\project_sound
 python scripts/full_test.py --check-only
 ```
 
-完整清单是`data/manifests/bolt_aug_v3_split_all.jsonl`；训练/验证/测试分别为`bolt_aug_v3_split_train.jsonl`、`bolt_aug_v3_split_val.jsonl`、`bolt_aug_v3_split_test.jsonl`。来源划分与训练清单打乱的种子固定为20261027，导入保留增强项目的划分和顺序。默认启用来源隔离检查。详细步骤见[全量训练指南](docs/FULL_TEST.md)。
+由你开始训练：
 
-旧82条批次、已有训练结果和6条小规模入口`python scripts/smoke_train.py`保留。新批次使用上面的全量入口，无需重新标注或重新划分。
-
-## 2. 标注、训练、检测
-
-将原始录音放入 `data/raw/`，建立待标注清单：
-
-```bat
-python -m bolt_audio init-manifest --audio-dir data/raw --output data/manifests/train.jsonl
+```powershell
+python scripts/full_test.py
 ```
 
-**支持你正在使用的 Adobe Audition 2023**：每段目标声音建立一个名为 `bolt_drop` 的范围标记，导出同一 WAV 的全部标记到一份 CSV，再用 `import-labels` 自动识别导入；也支持 Audacity 文本标签。正常录音用 `--normal` 明确确认。多区间操作和命令见 [数据与标注指南](docs/DATASET.md)。
+当前全量入口执行三步：提取全部特征；训练集拟合并在验证集选阈值、评估三组数据；保存和重载模型检查。训练仍为冻结PANNs Cnn14的2048维特征加12维时频统计，拟合标准化与逻辑回归权重。
 
-标注并按独立试验分配 train/val/test 后：
+**训练结束不再自动逐条运行部署推理或启动HTTP服务。** 评估直接使用提取的特征计算窗口、整段和事件指标；输出模型、指标及总报告到新的`artifacts/full_runs/<运行编号>/`。之前已生成的预测和日志保留。
 
-```bat
+切换数据用`--manifest`，只对本次命令生效：
+
+```powershell
+python scripts/full_test.py --manifest data/manifests/bolt_aug_v3_split_all.jsonl --check-only
+python scripts/full_test.py --manifest data/manifests/bolt_dataset_v2_all.jsonl --check-only
+```
+
+去掉`--check-only`才会训练。不指定清单时默认第二版。详见[训练与数据切换](docs/FULL_TEST.md)。
+
+## 2. 导出模型，交给独立推理项目
+
+无需重新训练，已有产物可以直接导出。将`<训练运行编号>`换为实际目录：
+
+```powershell
+python -m bolt_audio export-model --classifier "artifacts/full_runs/<训练运行编号>/model/classifier.json" --output-dir D:\models\bolt_v2
+```
+
+导出目录包含`classifier.json`、匹配的`Cnn14_mAP=0.431.pth`及校验索引`bundle.json`。原始分类器中的训练录音路径、报告和训练记录不进入模型包。输出目录需是新的；不覆盖已有模型。可用`--checkpoint`指定其他位置的匹配权重，代码检查SHA-256。
+
+在推理项目中：
+
+```powershell
+cd D:\project_sound_inference
+python scripts/check_model.py --model D:\models\bolt_v2
+python scripts/infer.py --model D:\models\bolt_v2 --audio D:\incoming\test.wav --output results/test.json
+python scripts/serve.py --model D:\models\bolt_v2 --host 127.0.0.1 --port 8000
+```
+
+推理项目也支持`--model <原始classifier.json> --checkpoint <匹配权重>`。完整模型包只需一个`--model`路径。部署机器无需训练代码或数据增强项目。当前本地演示模型是第一版360条训练产物的导出，第二版训练仍由你启动。
+
+## 3. 标注与分步训练
+
+继续支持Adobe Audition范围标记CSV和Audacity TXT。多个事件在同一WAV的标注文件中保留多个范围；每段目标标为`bolt_drop`，正常录音显式确认。详见[数据与标注](docs/DATASET.md)。
+
+```powershell
+python -m bolt_audio init-manifest --audio-dir data/raw --output data/manifests/train.jsonl
 python -m bolt_audio check-data --manifest data/manifests/train.jsonl
 python -m bolt_audio extract --manifest data/manifests/train.jsonl --output data/features/train.npz
-python -m bolt_audio train --features data/features/train.npz --output-dir artifacts/bolt_v1
-python -m bolt_audio infer --audio data/reference/bolt_drop.wav --classifier artifacts/bolt_v1/classifier.json --output results/detection.json --log-output logs/latest_detection.json
+python -m bolt_audio train --features data/features/train.npz --output-dir artifacts/bolt_v2
+python -m bolt_audio export-model --classifier artifacts/bolt_v2/classifier.json --output-dir D:\models\bolt_v2
 ```
 
-训练生成 `classifier.json` 和 `metrics.json`。验证集选阈值，测试集不参与选择。指标同时包含窗口、整条录音和时间区间匹配；时间匹配默认要求 IoU≥0.3，可用 `train --event-iou` 调整。该阈值是当前原型的评估规则，需要在现场数据上确认。
+全量第二版已标注，不需要重新执行`init-manifest`。测试集不参与拟合或阈值选择。事件匹配默认IoU≥0.3。诊断工具仍用于质量和特征查看，`diagnose`不再加载故障分类器。
 
-### 检测结果
+## 4. 代码和迁移说明
 
-以下数值仅为格式示例：
+| 代码 | 职责 |
+|---|---|
+| `src/bolt_audio/dataset.py` | 清单检查、时间标签、特征缓存 |
+| `src/bolt_audio/features.py` | 训练时的PANNs与时频特征 |
+| `src/bolt_audio/classifier.py` | 标准化、分类器拟合、阈值选择、重载检查 |
+| `src/bolt_audio/evaluation.py` | 时间区间匹配、指标计算 |
+| `src/bolt_audio/model_export.py` | 无训练的模型包导出 |
+| `scripts/full_test.py` | 全量训练与评估入口 |
 
-```json
-{
-  "bolt_detected": true,
-  "events": [{"start_s": 12.0, "end_s": 17.0, "score": 0.91}],
-  "score": 0.91,
-  "quality": {
-    "duration_seconds": 30.0,
-    "sample_rate": 44100,
-    "channels": 1,
-    "peak_amplitude": 0.95,
-    "rms_dbfs": -25.0,
-    "full_scale_sample_fraction": 0.0,
-    "clipping_warning": false
-  },
-  "processing_seconds": 8.2
-}
-```
+部署用的`api.py`、`detector.py`、HTTP启动与检查工具从本项目移出；`infer`和`serve`命令改由独立项目提供。训练配置移除`classifier_path`和上传限制，API依赖移至推理项目。完整迁移记录见[拆分说明](docs/INFERENCE_SPLIT.md)，代码阅读见[训练代码指南](docs/TRAINING_CODE.md)。
 
-- 无掉落时 `bolt_detected=false`、`events=[]`，分数、质量与耗时仍返回。
-- 时间单位为秒，相对于文件开头；允许多个不相连事件。默认 2 秒窗口、0.5 秒步长，区间是正窗口覆盖，**不承诺精确撞击边界**。
-- `score` 是最大窗口分类得分；事件 `score` 是该事件内最大得分。分数未经概率校准，不能解释为真实发生概率。若以后设置至少多个正窗口才报警，最大得分超过阈值也可能不形成事件。
-- `processing_seconds` 包括解码、重采样、特征和分类，不包括首次模型加载、网络上传和日志写盘。常驻服务只在启动时加载模型。
-- 逐窗分数、阈值、通用标签、完整质量信息、模型文件哈希、配置和警告写入 `logs/inference/`；`--log-output` 可指定路径。CLI 标准输出只打印检测结果，日志位置打印到标准错误。
-
-训练后可将预测导出为 Audition CSV，人工修正，辅助下一轮标注：
-
-```bat
-python -m bolt_audio infer --audio data/raw/trial_001.wav --classifier artifacts/bolt_v1/classifier.json --output results/trial_001.json --labels-output data/labels/trial_001.proposal.csv
-```
-
-`.csv` 自动使用 Audition 格式，`.txt` 使用 Audacity 格式。预测不会自动变成真值标签。验证/测试集应独立人工标注，避免照着模型输出验收模型。
-
-## 3. 服务器
-
-复制 `configs/default.json` 为 `configs/server.json`，将 `classifier_path` 改成 `artifacts/bolt_v1/classifier.json`：
-
-```bat
-python -m bolt_audio --config configs/server.json serve --host 127.0.0.1 --port 8000
-curl.exe -F "file=@D:/project_sound/data/reference/bolt_drop.wav" http://127.0.0.1:8000/detect
-```
-
-`POST /detect` 与 CLI 返回相同字段。`X-Request-ID` 响应头对应 `results/api/<id>.json` 和 `logs/api/<id>.json`。`GET /health` 检查服务与目标分类器状态；`/docs` 可手动上传。默认限制 20 MB、60 秒、单进程一次推理，繁忙返回 503 并提示重试。可用环境变量 `BOLT_API_TOKEN` 开启 Bearer token；TLS、设备协议、数据长期保存及正式告警渠道需按现场系统接入。
-
-## 4. 代码与目录
-
-```text
-src/bolt_audio/        标注导入、特征、训练、检测、API；vendor/panns 保留现有模型
-configs/              统一参数
-data/raw/             原始录音
-data/labels/          Audition CSV / Audacity 标签文本
-data/manifests/       每条录音的标注与数据划分
-data/features/        提取的训练特征
-checkpoints/          官方预训练权重
-artifacts/            训练出的目标分类器与指标
-results/              检测结果、诊断图
-logs/                 详细检测日志
-scripts/              Conda 安装、诊断、服务与验证工具
-tests/                数据隔离、标注、训练推理及时间匹配测试
-docs/                 标注、环境、清理及训练代码阅读指南
-third_party/          来源与校验记录；许可证随 vendor 分发
-```
-
-**读训练代码请从 [训练代码阅读指南](docs/TRAINING_CODE.md) 开始。** 当前路线是冻结的 PANNs Cnn14 深度特征 + 时频统计 + 逻辑回归；训练更新标准化和分类器参数，**不更新 Cnn14 的神经网络权重**。这适合作为数据量有限、CPU 可运行的首版基线；真实背景遮蔽与跨风机泛化必须用独立现场数据验证，后续再决定是否微调网络。
-
-清理清单和备份位置见 [清理说明](docs/CLEANUP.md)。源码来源见 [第三方说明](third_party/NOTICE.md)。本次未执行 Git 暂存、提交或上传，已有 `.git`、`.vscode`、原始录音和权重保留。
-
-本地验证命令：
-
-```bat
-python -m pytest -q
-python -m ruff check src tests scripts
-python -m pip check
-python scripts/check_server.py
-```
-
-默认 HTTP 检查验证缺少分类器时明确返回 503；训练后使用 `python scripts/check_server.py --config configs/server.json` 验证两次完整上传与结果/日志对应。合成数据测试只证明代码流程，不代表真实识别性能。
+环境继续使用Conda，见[环境说明](docs/CONDA.md)。安装开发依赖用`python -m pip install -e ".[dev]"`。第三方模型源码与许可保留，见`third_party/NOTICE.md`。原始音频、已有模型和Git未提交修改均保留，本次不启动训练、不提交或推送Git。

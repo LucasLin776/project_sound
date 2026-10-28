@@ -4,5 +4,5 @@ $projectDir = Split-Path -Parent $PSScriptRoot
 Push-Location -LiteralPath $projectDir
 try {
     & conda run --no-capture-output -n $EnvName python -m bolt_audio diagnose --audio data/reference/bolt_drop.wav --output results/reference/diagnostics.json
-    if ($LASTEXITCODE -ne 0) { throw 'Inference failed.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Feature diagnosis failed.' }
 } finally { Pop-Location }

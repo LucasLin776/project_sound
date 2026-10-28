@@ -1,7 +1,6 @@
 {
   "project_dir": "..",
   "checkpoint_dir": "checkpoints",
-  "classifier_path": null,
   "feature_set": "fusion",
   "sample_rate": 32000,
   "window_seconds": 2.0,
@@ -12,6 +11,5 @@
   "device": "cpu",
   "merge_gap_seconds": 0.25,
   "min_positive_windows": 1,
-  "max_audio_seconds": 60.0,
-  "max_upload_bytes": 20971520
+  "max_audio_seconds": 60.0
 }

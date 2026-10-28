@@ -119,11 +119,4 @@ def test_smoke_artifact_needs_explicit_loader_opt_in(tmp_path):
     assert LinearClassifier.load(path, allow_smoke_test=True).threshold == .5
 
 
-def test_output_check_accepts_either_prediction_without_accuracy_gate():
-    for detected in (False, True):
-        result = {"bolt_detected": detected, "events": [{"start_s": 1., "end_s": 2., "score": .8}] if detected else [],
-                  "score": .8 if detected else .1, "quality": {"duration_seconds": 30.}, "processing_seconds": .2}
-        smoke.validate_detection_result(result)
-    result["events"][0]["end_s"] = 31.
-    with pytest.raises(ValueError, match="录音范围"):
-        smoke.validate_detection_result(result)
+

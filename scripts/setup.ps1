@@ -26,7 +26,7 @@ try {
         & $condaExecutable run --no-capture-output -n $EnvName python -m pip install -r requirements.lock.windows.txt
         if ($LASTEXITCODE -ne 0) { throw 'Locked dependency installation failed.' }
     }
-    & $condaExecutable run --no-capture-output -n $EnvName python -m pip install -e '.[api,dev]'
+    & $condaExecutable run --no-capture-output -n $EnvName python -m pip install -e '.[dev]'
     if ($LASTEXITCODE -ne 0) { throw 'Project installation failed.' }
     if (-not $SkipWeights) {
         & $condaExecutable run --no-capture-output -n $EnvName python scripts/download_checkpoints.py

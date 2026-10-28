@@ -15,7 +15,6 @@ def project_root() -> Path:
 class Settings:
     project_dir: Path
     checkpoint_dir: Path
-    classifier_path: Path | None = None
     feature_set: str = "fusion"
     sample_rate: int = 32000
     window_seconds: float = 2.0
@@ -27,7 +26,6 @@ class Settings:
     merge_gap_seconds: float = 0.25
     min_positive_windows: int = 1
     max_audio_seconds: float = 60.0
-    max_upload_bytes: int = 20 * 1024 * 1024
 
     @classmethod
     def load(cls, path: Path | None = None, **overrides) -> "Settings":
@@ -40,7 +38,7 @@ class Settings:
         root = Path(data.pop("project_dir", ".."))
         root = root if root.is_absolute() else path.parent / root
         root = root.resolve()
-        for name in ("checkpoint_dir", "classifier_path"):
+        for name in ("checkpoint_dir",):
             value = data.get(name)
             if value is not None:
                 value = Path(value)
@@ -58,8 +56,8 @@ class Settings:
             raise ValueError("The official checkpoints require a 32000 Hz model input")
         if not (1 <= self.window_seconds <= 10 and 0 < self.hop_seconds <= self.window_seconds):
             raise ValueError("Require 1 <= window_seconds <= 10 and 0 < hop_seconds <= window_seconds")
-        if min(self.batch_size, self.threads, self.min_positive_windows, self.max_upload_bytes) < 1:
-            raise ValueError("Batch size, threads, min_positive_windows and upload limit must be positive")
+        if min(self.batch_size, self.threads, self.min_positive_windows) < 1:
+            raise ValueError("Batch size, threads and min_positive_windows must be positive")
         if min(self.negative_guard_seconds, self.merge_gap_seconds) < 0 or self.max_audio_seconds <= 0:
             raise ValueError("Invalid duration settings")
         if self.feature_set not in ("fusion", "panns", "acoustic") or self.device not in ("cpu", "cuda"):

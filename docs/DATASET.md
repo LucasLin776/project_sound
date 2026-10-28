@@ -120,7 +120,8 @@ JSONL 每行对应一个原始完整文件。示例：
 ## 七、训练后用 Audition 修正模型建议
 
 ```bat
-python -m bolt_audio infer --audio data/raw/trial_001.wav --classifier artifacts/bolt_v1/classifier.json --output results/trial_001.json --labels-output data/labels/trial_001.proposal.csv
+cd D:\project_sound_inference
+python scripts/infer.py --model D:\models\bolt_v2 --audio D:\project_sound\data\raw\trial_001.wav --output results/trial_001.json --labels-output D:\project_sound\data\labels\trial_001.proposal.csv
 ```
 
 `.csv` 自动导出为与你的示例相同的 Audition 表头、Tab 分隔、UTF-8 BOM 格式；`.txt` 则导出为 Audacity 格式。可用 `--label-format` 明确指定。将 CSV 通过 Audition 的标记导入功能载入对应 WAV，人工核对全部区间后再导入项目；模型建议本身不自动设为人工真值。

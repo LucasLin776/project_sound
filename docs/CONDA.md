@@ -33,7 +33,9 @@ Windows 可运行 `scripts/setup.ps1` 创建/复用环境，并使用 Windows �
 项目安装依赖统一以 `pyproject.toml` 为准。代码通过 editable 安装即时生效；依赖定义改变后可在项目根目录运行：
 
 ```bat
-python -m pip install -e ".[api,dev]"
+python -m pip install -e ".[dev]"
 ```
 
 旧 `.venv` 的删除被自动审批策略拒绝，暂时保留，现有运行和安装脚本只使用 Conda。此次已从项目依赖和 Windows 锁文件中移除研究工具专用的 h5py/pandas 等条目；没有从你现有的 Conda 环境强制卸载这些包。
+
+推理项目使用独立包`bolt_inference`；可先复用本环境运行其`scripts/*.py`，或在推理目录用`environment.yml`创建`wind-bolt-inference`环境。拆分不自动安装或卸载现有环境的包。
